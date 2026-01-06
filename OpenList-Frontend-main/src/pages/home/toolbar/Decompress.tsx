@@ -11,6 +11,7 @@ import { bus, fsArchiveDecompress, handleRespWithNotifySuccess } from "~/utils"
 import { batch, createSignal, onCleanup } from "solid-js"
 import { ModalFolderChoose } from "~/components"
 import { selectedObjs } from "~/store"
+import { CreateFolderButton } from "./CopyMove"
 
 export const Decompress = () => {
   const t = useT()
@@ -23,9 +24,14 @@ export const Decompress = () => {
   const [cacheFull, setCacheFull] = createSignal(true)
   const [putIntoNewDir, setPutIntoNewDir] = createSignal(false)
   const [overwrite, setOverwrite] = createSignal(false)
+  const [srcPath, setSrcPath] = createSignal("")
+  const [srcName, setSrcName] = createSignal<string[]>()
   const handler = (name: string) => {
     if (name === "decompress") {
+      const path = pathname()
       batch(() => {
+        setSrcPath(path)
+        setSrcName(selectedObjs().map((o) => o.name))
         setCacheFull(true)
         setInnerPath("/")
         setArchivePass("")
@@ -35,7 +41,11 @@ export const Decompress = () => {
   }
   const extractHandler = (args: string) => {
     const { inner, pass } = JSON.parse(args)
+    const path = pathname()
+    const idx = path.lastIndexOf("/")
     batch(() => {
+      setSrcPath(path.slice(0, idx))
+      setSrcName([path.slice(idx + 1)])
       setCacheFull(false)
       setInnerPath(inner)
       setArchivePass(pass)
@@ -54,21 +64,14 @@ export const Decompress = () => {
     }
     return t("home.toolbar.archive.extract_header", { path: innerPath() })
   }
-  const getPathAndName = () => {
-    let path = pathname()
-    if (innerPath() === "/") {
-      return { path: path, name: selectedObjs().map((o) => o.name) }
-    } else {
-      let idx = path.lastIndexOf("/")
-      return { path: path.slice(0, idx), name: [path.slice(idx + 1)] }
-    }
-  }
   return (
     <ModalFolderChoose
       header={header()}
       opened={isOpen()}
       onClose={onClose}
       loading={loading()}
+      defaultValue={srcPath}
+      headerSlot={(handler) => <CreateFolderButton handler={handler} />}
       footerSlot={
         <VStack w="$full" spacing="$2">
           <Checkbox
@@ -81,11 +84,10 @@ export const Decompress = () => {
         </VStack>
       }
       onSubmit={async (dst) => {
-        const { path, name } = getPathAndName()
         const resp = await ok(
-          path,
+          srcPath(),
           dst,
-          name,
+          srcName(),
           archivePass(),
           innerPath(),
           cacheFull(),

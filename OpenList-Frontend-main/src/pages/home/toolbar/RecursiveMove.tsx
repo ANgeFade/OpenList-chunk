@@ -15,6 +15,7 @@ import { ModalFolderChoose } from "~/components"
 import { useFetch, usePath, useRouter, useT } from "~/hooks"
 import { bus, fsRecursiveMove, handleRespWithNotifySuccess } from "~/utils"
 import { createSignal, onCleanup } from "solid-js"
+import { CreateFolderButton } from "./CopyMove"
 
 export const RecursiveMove = () => {
   const {
@@ -77,6 +78,7 @@ export const RecursiveMove = () => {
         opened={isOpen()}
         onClose={onClose}
         loading={loading()}
+        headerSlot={(handler) => <CreateFolderButton handler={handler} />}
         footerSlot={
           <HStack mr="auto" flex="0.8" spacing="$1">
             <SimpleSelect

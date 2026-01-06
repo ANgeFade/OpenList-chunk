@@ -57,13 +57,15 @@ async function chunkedUpload(
   const chunkSizeMB = (chunkSize / 1024 / 1024).toFixed(0)
 
   // Calculate local file hash - Incremental non-blocking xxHash64
-  const hashPromise = calculateXXHash64(file).then((xxhash) => {
-    console.log(`[Chunked Upload] Local xxHash64: ${xxhash}`)
-    return xxhash
-  }).catch(err => {
-    console.warn(`[Chunked Upload] Failed to compute local hash: ${err}`)
-    return ""
-  })
+  const hashPromise = calculateXXHash64(file)
+    .then((xxhash) => {
+      console.log(`[Chunked Upload] Local xxHash64: ${xxhash}`)
+      return xxhash
+    })
+    .catch((err) => {
+      console.warn(`[Chunked Upload] Failed to compute local hash: ${err}`)
+      return ""
+    })
 
   // Generate upload ID
   const uploadId = await generateUploadId(uploadPath, file)
@@ -73,7 +75,9 @@ async function chunkedUpload(
   const totalChunks = chunks.length
 
   console.log(`[Chunked Upload] Starting: ${file.name}`)
-  console.log(`[Chunked Upload] File size: ${fileSizeMB} MB, Chunks: ${totalChunks} x ${chunkSizeMB} MB`)
+  console.log(
+    `[Chunked Upload] File size: ${fileSizeMB} MB, Chunks: ${totalChunks} x ${chunkSizeMB} MB`,
+  )
 
   // State for speed calculation
   let totalUploadedBytes = 0
@@ -91,7 +95,9 @@ async function chunkedUpload(
 
     // Calculate chunk CRC32
     const chunkBuffer = await chunk.arrayBuffer()
-    const chunkCRC32 = (crc32(new Uint8Array(chunkBuffer)) >>> 0).toString(16).padStart(8, '0')
+    const chunkCRC32 = (crc32(new Uint8Array(chunkBuffer)) >>> 0)
+      .toString(16)
+      .padStart(8, "0")
 
     let attempt = 0
     let success = false
@@ -112,7 +118,7 @@ async function chunkedUpload(
               "X-Chunk-CRC32": chunkCRC32,
               Password: password(),
             },
-            onUploadProgress: (progressEvent) => {
+            onUploadProgress: (progressEvent: any) => {
               if (progressEvent.total) {
                 totalUploadedBytes = i * chunkSize + progressEvent.loaded
                 const now = Date.now()
@@ -122,11 +128,27 @@ async function chunkedUpload(
                   instantSpeed = loadedDiff / duration
                   averageSpeed = totalUploadedBytes / ((now - startTime) / 1000)
                   setUpload("speed", instantSpeed)
-                  console.log(`[Chunked Upload] Chunk ${i + 1} progress: ${((progressEvent.loaded / progressEvent.total) * 100).toFixed(1)}%, Instant: ${(instantSpeed / 1024 / 1024).toFixed(2)} MB/s, Average: ${(averageSpeed / 1024 / 1024).toFixed(2)} MB/s`)
+                  console.log(
+                    `[Chunked Upload] Chunk ${i + 1} progress: ${(
+                      (progressEvent.loaded / progressEvent.total) *
+                      100
+                    ).toFixed(1)}%, Instant: ${(
+                      instantSpeed /
+                      1024 /
+                      1024
+                    ).toFixed(2)} MB/s, Average: ${(
+                      averageSpeed /
+                      1024 /
+                      1024
+                    ).toFixed(2)} MB/s`,
+                  )
                   lastTime = now
                   lastLoaded = totalUploadedBytes
                 }
-                const chunkProgress = (progressEvent.loaded / progressEvent.total) * (chunkSize / file.size) * 95
+                const chunkProgress =
+                  (progressEvent.loaded / progressEvent.total) *
+                  (chunkSize / file.size) *
+                  95
                 const overallProgress = (i / totalChunks) * 95 + chunkProgress
                 setUpload("progress", overallProgress)
               }
@@ -141,7 +163,9 @@ async function chunkedUpload(
 
         // Log server returned CRC if available
         if (resp.data && resp.data.crc32) {
-          console.log(`[Chunked Upload] Chunk ${i + 1} Verified. Client CRC: ${chunkCRC32}, Server CRC: ${resp.data.crc32}`)
+          console.log(
+            `[Chunked Upload] Chunk ${i + 1} Verified. Client CRC: ${chunkCRC32}, Server CRC: ${resp.data.crc32}`,
+          )
         }
 
         totalUploadedBytes = (i + 1) * chunkSize
@@ -154,15 +178,27 @@ async function chunkedUpload(
         const progress = ((i + 1) / totalChunks) * 95
         setUpload("progress", progress)
 
-        console.log(`[Chunked Upload] Chunk ${i + 1}/${totalChunks} done (${(chunkSpeed / 1024 / 1024).toFixed(2)} MB/s), Average: ${(averageSpeed / 1024 / 1024).toFixed(2)} MB/s`)
+        console.log(
+          `[Chunked Upload] Chunk ${i + 1}/${totalChunks} done (${(
+            chunkSpeed /
+            1024 /
+            1024
+          ).toFixed(2)} MB/s), Average: ${(
+            averageSpeed /
+            1024 /
+            1024
+          ).toFixed(2)} MB/s`,
+        )
         success = true
       } catch (e: any) {
-        console.error(`[Chunked Upload] Chunk ${i + 1} attempt ${attempt} failed: ${e.message}`)
+        console.error(
+          `[Chunked Upload] Chunk ${i + 1} attempt ${attempt} failed: ${e.message}`,
+        )
         if (attempt >= 3) {
           throw new Error(`Chunk ${i + 1} failed after 3 attempts: ${e.message}`)
         }
         // Wait 1s before retry
-        await new Promise(r => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, 1000))
       }
     }
   }
@@ -170,7 +206,9 @@ async function chunkedUpload(
   // Wait for hash calculation
   setUpload("msg", "Verifying local hash...")
   const localHash = await hashPromise
-  console.log(`[Chunked Upload] All chunks done. Local xxHash64: ${localHash}. Requesting merge...`)
+  console.log(
+    `[Chunked Upload] All chunks done. Local xxHash64: ${localHash}. Requesting merge...`,
+  )
 
   setUpload("status", "backending")
   setUpload("msg", "Merging chunks...")
@@ -180,7 +218,7 @@ async function chunkedUpload(
     upload_id: uploadId,
     path: uploadPath,
     total_chunks: totalChunks,
-    as_task: asTask,
+    as_task: true, // Always use async task for chunked uploads to prevent timeout
     overwrite: overwrite,
     last_modified: file.lastModified,
     hash: localHash, // Send local hash for verification
@@ -190,11 +228,11 @@ async function chunkedUpload(
     // Check if response contains remote file hash
     const remoteHash = mergeResp.data?.hash
     if (remoteHash) {
-      console.log(
-        `[Chunked Upload] Merge Success. Remote Hash:`, remoteHash
-      )
+      console.log(`[Chunked Upload] Merge Success. Remote Hash:`, remoteHash)
       if (remoteHash.xxh64 && localHash && remoteHash.xxh64 !== localHash) {
-        console.error(`[Chunked Upload] CRITICAL: Hash Mismatch! Local: ${localHash}, Remote: ${remoteHash.xxh64}`)
+        console.error(
+          `[Chunked Upload] CRITICAL: Hash Mismatch! Local: ${localHash}, Remote: ${remoteHash.xxh64}`,
+        )
         // Optionally throw error here, but for now just log critical error
       }
     }
@@ -236,10 +274,9 @@ async function directUpload(
   }
   const resp: EmptyResp = await r.put("/fs/form", form, {
     headers: headers,
-    onUploadProgress: (progressEvent) => {
+    onUploadProgress: (progressEvent: any) => {
       if (progressEvent.total) {
-        const complete =
-          ((progressEvent.loaded / progressEvent.total) * 100) | 0
+        const complete = ((progressEvent.loaded / progressEvent.total) * 100) | 0
         setUpload("progress", complete)
 
         const timestamp = new Date().valueOf()
@@ -283,8 +320,17 @@ export const FormUpload: Upload = async (
 
   // Use chunked upload for large files
   if (file.size > chunkSize) {
-    console.log(`[Form Upload] ${file.name} (${fileSizeMB} MB) > ${chunkSizeMB} MB threshold, using chunked upload`)
-    return chunkedUpload(uploadPath, file, setUpload, asTask, overwrite, chunkSize)
+    console.log(
+      `[Form Upload] ${file.name} (${fileSizeMB} MB) > ${chunkSizeMB} MB threshold, using chunked upload`,
+    )
+    return chunkedUpload(
+      uploadPath,
+      file,
+      setUpload,
+      asTask,
+      overwrite,
+      chunkSize,
+    )
   }
 
   // Use direct upload for small files

@@ -1,9 +1,12 @@
 import * as i18n from "@solid-primitives/i18n"
 import { createResource, createSignal } from "solid-js"
+// Hardcode: Static import of Chinese dictionary
+import { dict as zhCNDict } from "~/lang/zh-CN/entry"
+
 export { i18n }
 
 // glob search by Vite
-const langs = import.meta.glob("../lang/*/index.json", {
+const langs = import.meta.glob("~/lang/*/index.json", {
   eager: true,
   import: "lang",
 })
@@ -16,25 +19,18 @@ export const languages = Object.keys(langs).map((langPath) => {
   return { code: langCode, lang: langName }
 })
 
-// determine browser's default language
-const userLang = navigator.language.toLowerCase()
-const defaultLang =
-  languages.find((lang) => lang.code.toLowerCase() === userLang)?.code ||
-  languages.find(
-    (lang) => lang.code.toLowerCase().split("-")[0] === userLang.split("-")[0],
-  )?.code ||
-  "en"
+// Hardcode: Force default language to zh-CN
+const defaultLang = "zh-CN"
 
-// Get initial language from localStorage or fallback to defaultLang
-export let initialLang = localStorage.getItem("lang") ?? defaultLang
+// Hardcode: Ignore localStorage and ALWAYS use zh-CN
+export let initialLang = defaultLang
 
-if (!languages.some((lang) => lang.code === initialLang)) {
-  initialLang = defaultLang
-}
+// if (!languages.some((lang) => lang.code === initialLang)) {
+//   initialLang = defaultLang
+// }
 
 // Type imports
-// use `type` to not include the actual dictionary in the bundle
-import type * as en from "../lang/en/entry"
+import type * as en from "~/lang/en/entry"
 
 export type Lang = keyof typeof langs
 export type RawDictionary = typeof en.dict
@@ -42,13 +38,17 @@ export type Dictionary = i18n.Flatten<RawDictionary>
 
 // Fetch and flatten the dictionary
 const fetchDictionary = async (locale: Lang): Promise<Dictionary> => {
+  // Hardcode: Return static Chinese dictionary directly if locale is zh-CN or as fallback
+  if (locale === "zh-CN") {
+    return i18n.flatten(zhCNDict as RawDictionary)
+  }
   try {
-    const dict: RawDictionary = (await import(`../lang/${locale}/entry.ts`))
-      .dict
-    return i18n.flatten(dict) // Flatten dictionary for easier access to keys
+    const dict: RawDictionary = (await import(`~/lang/${locale}/entry.ts`)).dict
+    return i18n.flatten(dict)
   } catch (err) {
     console.error(`Error loading dictionary for locale: ${locale}`, err)
-    throw new Error(`Failed to load dictionary for ${locale}`)
+    // Hardcode: Fallback to Chinese on error
+    return i18n.flatten(zhCNDict as RawDictionary)
   }
 }
 

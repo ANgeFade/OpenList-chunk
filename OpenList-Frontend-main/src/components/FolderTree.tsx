@@ -340,7 +340,7 @@ export type ModalFolderChooseProps = {
   onClose: () => void
   onSubmit?: (text: string) => void
   type?: string
-  defaultValue?: string
+  defaultValue?: string | (() => string)
   loading?: boolean
   footerSlot?: JSXElement
   headerSlot?: (handler: FolderTreeHandler | undefined) => JSXElement
@@ -349,12 +349,19 @@ export type ModalFolderChooseProps = {
 }
 export const ModalFolderChoose = (props: ModalFolderChooseProps) => {
   const t = useT()
-  const [value, setValue] = createSignal(props.defaultValue ?? "/")
+  const [value, setValue] = createSignal("/")
   const [handler, setHandler] = createSignal<FolderTreeHandler>()
   createEffect(() => {
     if (!props.opened) return
     handler()?.setPath(value())
   })
+  if (typeof props.defaultValue === "function") {
+    createEffect(() => {
+      setValue((props.defaultValue as () => string)())
+    })
+  } else if (typeof props.defaultValue === "string") {
+    setValue(props.defaultValue)
+  }
   return (
     <Modal
       size="xl"

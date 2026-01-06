@@ -1,6 +1,6 @@
 import { Component, lazy } from "solid-js"
 import { getIframePreviews, me, getSettingBool, isArchive } from "~/store"
-import { Obj, ObjType, UserMethods, UserPermissions } from "~/types"
+import { Obj, ObjType, UserMethods, UserPermissions, ArchiveObj } from "~/types"
 import { ext } from "~/utils"
 import { generateIframePreview } from "./iframe"
 import { useRouter } from "~/hooks"
@@ -34,6 +34,7 @@ export interface Preview {
   provider?: RegExp
   component: Component
   prior: Prior
+  availableInArchive?: boolean
 }
 
 export type PreviewComponent = Pick<Preview, "name" | "component">
@@ -82,6 +83,7 @@ const previews: Preview[] = [
     exts: ["url"],
     component: lazy(() => import("./text-editor")),
     prior: true,
+    availableInArchive: false,
   },
   {
     name: "Image",
@@ -172,6 +174,7 @@ const previews: Preview[] = [
           !getSettingBool("share_preview_download_by_default"))
       )
     },
+    availableInArchive: false,
   },
 ]
 
@@ -186,6 +189,7 @@ export const getPreviews = (
   const downloadPrior =
     (!isShare() && getSettingBool("preview_download_by_default")) ||
     (isShare() && getSettingBool("share_preview_download_by_default"))
+  const isInArchive = !!(file as ArchiveObj).archive
   // internal previews
   if (!isShare() || getSettingBool("share_preview")) {
     previews.forEach((preview) => {
@@ -198,6 +202,10 @@ export const getPreviews = (
         extsContains(preview.exts, file.name)
       ) {
         const r = { name: preview.name, component: preview.component }
+        // Skip previews that are not available in archive when file is in archive
+        if (isInArchive && preview.availableInArchive === false) {
+          return
+        }
         if (!downloadPrior && isPrior(preview.prior)) {
           res.push(r)
         } else {
@@ -208,12 +216,16 @@ export const getPreviews = (
   }
   // iframe previews
   const iframePreviews = getIframePreviews(file.name)
-  res.push(
-    ...iframePreviews.map((preview) => ({
-      name: preview.key,
-      component: generateIframePreview(preview.value),
-    })),
-  )
+  const matchedIframePreviews = iframePreviews.map((preview) => ({
+    name: preview.key,
+    component: generateIframePreview(preview.value),
+  }))
+  // Condition for iframe previews to respect the "preview_download_by_default" setting
+  if (downloadPrior) {
+    subsequent.push(...matchedIframePreviews)
+  } else {
+    res.push(...matchedIframePreviews)
+  }
 
   // download page
   const downloadComponent: PreviewComponent = {

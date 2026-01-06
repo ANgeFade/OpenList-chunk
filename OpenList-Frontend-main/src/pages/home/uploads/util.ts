@@ -25,7 +25,13 @@ export const traverseFileTree = async (entry: FileSystemEntry) => {
             for (let i = 0; i < entries.length; i++) {
               await internalProcess(entries[i], path + entry.name + "/")
             }
-            resolve({})
+            if (entries.length > 0) {
+              readEntries()
+            } else {
+              resolve({})
+            }
+
+            /*  resolve({})
             /**
             why? https://stackoverflow.com/questions/3590058/does-html5-allow-drag-drop-upload-of-folders-or-a-folder-tree/53058574#53058574
             Unfortunately none of the existing answers are completely correct because 
@@ -35,10 +41,11 @@ export const traverseFileTree = async (entry: FileSystemEntry) => {
             To actually get all the files, we'll need to call readEntries repeatedly (for each directory we encounter) 
             until it returns an empty array. If we don't, we will miss some files/sub-directories in a directory 
             e.g. in Chrome, readEntries will only return at most 100 entries at a time.
-            */
+            
             if (entries.length > 0) {
               readEntries()
             }
+            */
           }, errorCallback)
         }
         readEntries()
@@ -82,5 +89,10 @@ export const calculateXXHash64 = async (file: File) => {
 
 // Keep old signature for compatibility if needed, but we essentially replace it
 export const calculateHash = async (file: File) => {
-  return calculateXXHash64(file).then(xxhash => ({ xxhash, md5: '', sha1: '', sha256: '' }))
+  return calculateXXHash64(file).then((xxhash) => ({
+    xxhash,
+    md5: "",
+    sha1: "",
+    sha256: "",
+  }))
 }

@@ -47,10 +47,23 @@ export const BatchRename = () => {
   const [validationErrorNew, setValidationErrorNew] = createSignal<string>("")
   const t = useT()
 
+  const validateRegex = (pattern: string) => {
+    try {
+      // eslint-disable-next-line no-new
+      new RegExp(pattern)
+      return { valid: true as const }
+    } catch (e) {
+      return { valid: false as const, error: "invalid_regex" }
+    }
+  }
+
   const handleInputSrc = (newValue: string) => {
     setSrcName(newValue)
     if (type() === "2" || type() === "3") {
       const validation = validateFilename(newValue)
+      setValidationErrorSrc(validation.valid ? "" : validation.error || "")
+    } else if (type() === "1") {
+      const validation = validateRegex(newValue)
       setValidationErrorSrc(validation.valid ? "" : validation.error || "")
     } else {
       setValidationErrorSrc("")
@@ -92,6 +105,13 @@ export const BatchRename = () => {
       notify.warning(t("global.empty_input"))
       return
     }
+    if (type() === "1") {
+      const validationSrc = validateRegex(srcName())
+      if (!validationSrc.valid) {
+        notify.warning(t(`global.${validationSrc.error}`))
+        return
+      }
+    }
     if (type() === "2" || type() === "3") {
       const validationSrc = validateFilename(srcName())
       if (!validationSrc.valid) {
@@ -104,10 +124,10 @@ export const BatchRename = () => {
         return
       }
     }
-    const replaceRegexp = new RegExp(srcName(), "g")
-
     let matchNames: RenameObj[]
     if (type() === "1") {
+      const replaceRegexp = new RegExp(srcName(), "g")
+
       matchNames = selectedObjs()
         .filter((obj) => obj.name.match(srcName()))
         .map((obj) => {
@@ -239,6 +259,9 @@ export const BatchRename = () => {
                 } else if (event === "2") {
                   setNewNameType("number")
                 }
+                // Clear validation errors when switching type
+                setValidationErrorSrc("")
+                setValidationErrorNew("")
               }}
             >
               <HStack spacing="$4">
@@ -292,6 +315,11 @@ export const BatchRename = () => {
                   }
                 }}
               />
+              <Show when={validationErrorNew()}>
+                <Text color="$danger9" fontSize="$sm">
+                  {t(`global.${validationErrorNew()}`)}
+                </Text>
+              </Show>
               <Show when={type() === "2"}>
                 <Input
                   id="modal-input3"
@@ -311,11 +339,6 @@ export const BatchRename = () => {
                     }
                   }}
                 />
-              </Show>
-              <Show when={validationErrorNew()}>
-                <Text color="$danger9" fontSize="$sm">
-                  {t(`global.${validationErrorNew()}`)}
-                </Text>
               </Show>
             </VStack>
           </ModalBody>

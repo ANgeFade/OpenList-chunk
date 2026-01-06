@@ -26,6 +26,11 @@ export type StoreObj = Obj & {
   selected?: boolean
 }
 
+export type ArchiveObj = Obj & {
+  inner_path?: string
+  archive?: Obj
+}
+
 export type RenameObj = {
   src_name: string
   new_name: string

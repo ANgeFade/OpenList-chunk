@@ -56,6 +56,7 @@ const AddOrEdit = () => {
     permission: 0,
     disabled: false,
     sso_id: "",
+    allow_ldap: false,
   })
   const [userLoading, loadUser] = useFetch(
     (): PResp<User> => r.get(`/admin/user/get?id=${id}`),
@@ -143,6 +144,20 @@ const AddOrEdit = () => {
             checked={user.disabled}
           >
             {t(`users.disabled`)}
+          </Checkbox>
+        </FormControl>
+        <FormControl w="fit-content" display="flex">
+          <Checkbox
+            css={{ whiteSpace: "nowrap" }}
+            id="allow_ldap"
+            onChange={(e: any) =>
+              setUser("allow_ldap", e.currentTarget.checked)
+            }
+            color="$neutral10"
+            fontSize="$sm"
+            checked={user.allow_ldap}
+          >
+            {t(`users.allow_ldap`)}
           </Checkbox>
         </FormControl>
         <Button

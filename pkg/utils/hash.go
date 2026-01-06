@@ -254,3 +254,4 @@ func (hi HashInfo) All() iter.Seq2[*HashType, string] {
 		}
 	}
 }
+ 

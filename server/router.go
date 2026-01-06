@@ -249,3 +249,4 @@ func InitS3(e *gin.Engine) {
 	Cors(e)
 	S3Server(e.Group("/"))
 }
+ 

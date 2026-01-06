@@ -1,47 +1,36 @@
-# Stage 1: Build Frontend
-FROM node:20 AS web-builder
-WORKDIR /app
-RUN npm install -g pnpm
-COPY OpenList-Frontend-main/package.json OpenList-Frontend-main/pnpm-lock.yaml ./
-RUN pnpm install --no-frozen-lockfile
-COPY OpenList-Frontend-main/ ./
-RUN pnpm build
+### Default image is base. You can add other support by modifying BASE_IMAGE_TAG. The following parameters are supported: base (default), aria2, ffmpeg, aio
+ARG BASE_IMAGE_TAG=base
 
-# Stage 2: Build Backend
-FROM golang:1.25-alpine AS go-builder
-WORKDIR /app
-RUN apk add --no-cache git bash build-base
+FROM alpine:edge AS builder
+LABEL stage=go-builder
+WORKDIR /app/
+RUN apk add --no-cache bash curl jq gcc git go musl-dev
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
-# Copy frontend dist to public/dist for embedding
-COPY --from=web-builder /app/dist ./public/dist
+COPY ./ ./
+RUN bash build.sh release docker
 
-# Build logic similar to build.sh but optimized for Docker
-RUN builtAt="$(date +'%F %T %z')" && \
-    gitAuthor="OpenList Contributors" && \
-    gitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
-    version=$(git describe --tags --abbrev=0 2>/dev/null || echo "v4.0.0") && \
-    CGO_ENABLED=1 go build -o openlist \
-    -ldflags="-w -s \
-    -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=$builtAt' \
-    -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitAuthor=$gitAuthor' \
-    -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=$gitCommit' \
-    -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.Version=$version' \
-    -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=$version'" \
-    -tags=jsoniter .
+FROM openlistteam/openlist-base-image:${BASE_IMAGE_TAG}
+LABEL MAINTAINER="OpenList"
+ARG INSTALL_FFMPEG=false
+ARG INSTALL_ARIA2=false
+ARG USER=openlist
+ARG UID=1001
+ARG GID=1001
 
-# Stage 3: Final Runtime
-FROM alpine:latest
-RUN apk add --no-cache ca-certificates tzdata bash
-WORKDIR /opt/openlist
-COPY --from=go-builder /app/openlist ./
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+WORKDIR /opt/openlist/
 
-# Environment variables
-ENV PUID=1000 PGID=1000 UMASK=022
-VOLUME /opt/openlist/data
+RUN addgroup -g ${GID} ${USER} && \
+    adduser -D -u ${UID} -G ${USER} ${USER} && \
+    mkdir -p /opt/openlist/data
+
+COPY --from=builder --chmod=755 --chown=${UID}:${GID} /app/bin/openlist ./
+COPY --chmod=755 --chown=${UID}:${GID} entrypoint.sh /entrypoint.sh
+
+USER ${USER}
+RUN /entrypoint.sh version
+
+ENV UMASK=022 RUN_ARIA2=${INSTALL_ARIA2}
+VOLUME /opt/openlist/data/
 EXPOSE 5244 5245
-
-ENTRYPOINT ["/entrypoint.sh"]
+CMD [ "/entrypoint.sh" ]

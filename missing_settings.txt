@@ -1,0 +1,2 @@
+123_temp_dir ||| 123 temp dir
+ldap_skip_tls_verify ||| Ldap skip tls verify

@@ -39,19 +39,40 @@ docker run -d --name openlist -p 5244:5244 -v "/opt/openlist/data:/opt/openlist/
 **强烈不建议**在 Windows 下交叉编译 Linux 版本（由于 CGO 和 SQLite 的兼容性玄学问题）。
 请务必在**目标系统（Linux 服务器）上直接进行原生编译**。
 
-### 1. 编译
+### 1. Frontend Build
 ```bash
-# 1. 准备前端资源
+# Enter frontend directory
 cd OpenList-Frontend-main
-pnpm install && npm run build
-# 将 dist 目录下的内容复制到后端的 public/dist/ 中
-
-# 2. 回到后端目录编译 (推荐开启 CGO 以获得最佳 SQLite 性能)
-go mod tidy
-go build -ldflags="-s -w" -o openlist .
+# Install dependencies (use --legacy-peer-deps to avoid solid-js/vite conflicts)
+npm install --legacy-peer-deps
+# Build
+npm run build
+# Sync artifacts to backend public directory
+# Windows
+xcopy /e /i /y dist ..\public\dist
+# Linux/macOS
+cp -r dist/* ../public/dist/
 ```
 
-### 2. 安装/更新
+### 2. Backend Build
+Requires [GCC](https://jmeubank.github.io/tdm-gcc/) (for SQLite driver compilation).
+```powershell
+# Windows (PowerShell)
+$env:CGO_ENABLED=1  # Enable CGO for SQLite support
+$env:CC="gcc"       # Specify GCC compiler
+go build -o openlist.exe -tags=jsoniter -ldflags="-s -w" .
+```
+
+```bash
+# Linux
+export CGO_ENABLED=1
+go build -o openlist -tags=jsoniter -ldflags="-s -w" .
+```
+
+---
+
+## ⚙️ Deployment Guide
+安装/更新
 本项目与原版数据库**完美兼容**。
 
 1.  停止正在运行的 OpenList 服务。

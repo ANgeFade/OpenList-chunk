@@ -1,0 +1,40 @@
+1. 后端部分 (Backend)
+server/handles/fsup.go
+ (最核心修改)：
+分片上传 (
+FsChunkUpload
+)：新增 CRC32 校验逻辑。服务器会计算接收到的分片哈希，与客户端 Header 中的 X-Chunk-CRC32 比对。
+异步合并 (
+FsChunkMerge
+) [V14 关键优化]：重写了合并逻辑。当 as_task=true 时，服务器立即返回任务 ID，并在后台 Goroutine 中执行分片合并、xxHash64 全局校验和转存操作，彻底解决了处理大型文件（GB 级）时的 HTTP 524 超时问题。
+internal/bootstrap/config.go
+ & 
+task.go
+：
+新增了定时清理存根 (
+CleanStaleChunks
+)。
+在任务管理器中注册了每 10 分钟运行一次的后台 Cron 任务，自动删除超过 30 分钟未动过的残留临时分片文件夹。
+pkg/utils/hash.go
+：
+注册并导出了 XXH64、CRC32 和 CRC64 算法，供上传校验使用。
+server/router.go
+：
+新增了分片上传和合并的路由接口：/api/fs/put/chunk 和 /api/fs/put/chunk/merge。
+internal/conf/const.go
+ & 
+internal/bootstrap/data/setting.go
+：
+引入了 ChunkedUploadChunkSize 配置项，允许用户在后台设置分片大小（默认 50MB），并将其设为 PUBLIC 供前端读取。
+2. 前端部分 (Frontend)
+src/pages/home/uploads/form.ts
+：
+分片逻辑重构：实现了 V2 协议，包含分片切割、并发控制。
+三层重试机制：单个分片上传失败或 CRC 校验不一致时，自动请求 3 次重试。
+强制异步合并：强制请求 as_task: true，配合后端 V14 逻辑解决超时。
+Base64 编码修复：解决了文件名中含中文字符导致的 btoa Unicode 报错问题。
+src/pages/home/uploads/util.ts
+：
+引入 hash-wasm，实现了非阻塞式 xxHash64 计算。通过 yield 机制确保在大文件计算哈希时，浏览器 UI 不会假死。
+src/app/i18n.ts：
+修复了官方版本中语言包加载路径的 Bug，确保在不同环境下都能正确读取 src/lang 文件夹。

@@ -1,0 +1,2583 @@
+diff --git a/.github/actions/sync_to_crowdin/action.yml b/.github/actions/sync_to_crowdin/action.yml
+new file mode 100644
+index 000000000..61266e096
+--- /dev/null
++++ b/.github/actions/sync_to_crowdin/action.yml
+@@ -0,0 +1,36 @@
++name: Sync i18n to Crowdin
++
++inputs:
++  crowdin_project_id:
++    required: true
++    description: "Crowdin Project ID"
++  crowdin_personal_token:
++    required: true
++    description: "Crowdin Personal Token"
++
++runs:
++  using: "composite"
++  steps:
++    - name: Setup Node
++      uses: actions/setup-node@v6
++      with:
++        node-version: "22"
++        registry-url: "https://registry.npmjs.org"
++
++    - name: Install pnpm
++      uses: pnpm/action-setup@v4
++      with:
++        # version: 9.9.0
++        run_install: false
++
++    - name: Install dependencies
++      shell: bash
++      run: pnpm install
++
++    - name: Sync to Crowdin
++      shell: bash
++      run: |
++        pnpm crowdin:upload
++      env:
++        CROWDIN_PROJECT_ID: ${{ inputs.crowdin_project_id }}
++        CROWDIN_PERSONAL_TOKEN: ${{ inputs.crowdin_personal_token }}
+diff --git a/.github/workflows/build_pr.yml b/.github/workflows/build_pr.yml
+index 72aa3242e..5aa5d22f5 100644
+--- a/.github/workflows/build_pr.yml
++++ b/.github/workflows/build_pr.yml
+@@ -12,7 +12,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout code
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           fetch-depth: 0
+           submodules: recursive
+@@ -40,7 +40,7 @@ jobs:
+           # OPENLIST_FRONTEND_BUILD_COMPRESS: false
+ 
+       - name: Upload Build Artifacts
+-        uses: actions/upload-artifact@v5
++        uses: actions/upload-artifact@v6
+         with:
+           name: openlist-frontend-dist-dev-${{ github.sha }}
+           path: dist/
+diff --git a/.github/workflows/build_release.yml b/.github/workflows/build_release.yml
+index 3c44b06c5..9c5e27250 100644
+--- a/.github/workflows/build_release.yml
++++ b/.github/workflows/build_release.yml
+@@ -36,7 +36,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout code
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           fetch-depth: 0
+           submodules: recursive
+diff --git a/.github/workflows/build_rolling.yml b/.github/workflows/build_rolling.yml
+index 0120bfe26..726bc2ef8 100644
+--- a/.github/workflows/build_rolling.yml
++++ b/.github/workflows/build_rolling.yml
+@@ -26,7 +26,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout code
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           fetch-depth: 0
+           submodules: recursive
+diff --git a/.github/workflows/format.yml b/.github/workflows/format.yml
+index e45bc903d..1fa224d48 100644
+--- a/.github/workflows/format.yml
++++ b/.github/workflows/format.yml
+@@ -12,7 +12,7 @@ jobs:
+       contents: write
+ 
+     steps:
+-      - uses: actions/checkout@v5
++      - uses: actions/checkout@v6
+       - uses: pnpm/action-setup@v4
+ 
+       - name: Setup Node.js environment
+diff --git a/.github/workflows/i18n_sync.yml b/.github/workflows/i18n_sync.yml
+index 3745b93ff..784b29a87 100644
+--- a/.github/workflows/i18n_sync.yml
++++ b/.github/workflows/i18n_sync.yml
+@@ -18,13 +18,13 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout frontend codes
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           fetch-depth: 0
+           submodules: recursive
+ 
+       - name: Checkout backend codes
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           repository: ${{ vars.SYNC_LANG_ENV_BACKEND_REPOSITORY || 'OpenListTeam/OpenList' }}
+           ref: main
+@@ -83,31 +83,12 @@ jobs:
+             git push
+           fi
+ 
+-      - name: Setup Node
+-        if: steps.verify-changed-files.outputs.changed == 'true'
+-        uses: actions/setup-node@v6
+-        with:
+-          node-version: "22"
+-          registry-url: "https://registry.npmjs.org"
+-
+-      - name: Install pnpm
+-        if: steps.verify-changed-files.outputs.changed == 'true'
+-        uses: pnpm/action-setup@v4
+-        with:
+-          # version: 9.9.0
+-          run_install: false
+-
+-      - name: Install dependencies
+-        if: steps.verify-changed-files.outputs.changed == 'true'
+-        run: pnpm install
+-
+       - name: Sync to Crowdin
+-        if: steps.verify-changed-files.outputs.changed == 'true'
+-        run: |
+-          pnpm crowdin:upload
+-        env:
+-          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+-          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
++        if: ${{ steps.verify-changed-files.outputs.changed == 'true' || github.event_name == 'push' }}
++        uses: ./.github/actions/sync_to_crowdin
++        with:
++          crowdin_project_id: ${{ secrets.CROWDIN_PROJECT_ID }}
++          crowdin_personal_token: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+ 
+ permissions:
+   contents: write
+diff --git a/.github/workflows/manual_sync_to_crowdin.yml b/.github/workflows/manual_sync_to_crowdin.yml
+new file mode 100644
+index 000000000..00ca67cb0
+--- /dev/null
++++ b/.github/workflows/manual_sync_to_crowdin.yml
+@@ -0,0 +1,21 @@
++name: Manual sync i18n to Crowdin
++
++on:
++  workflow_dispatch:
++
++jobs:
++  run_sync:
++    name: Run sync
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout frontend codes
++        uses: actions/checkout@v6
++        with:
++          fetch-depth: 0
++          submodules: recursive
++
++      - name: Sync to Crowdin
++        uses: ./.github/actions/sync_to_crowdin
++        with:
++          crowdin_project_id: ${{ secrets.CROWDIN_PROJECT_ID }}
++          crowdin_personal_token: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+diff --git a/.github/workflows/sync_repo.yml b/.github/workflows/sync_repo.yml
+index bb07565b4..bf760b420 100644
+--- a/.github/workflows/sync_repo.yml
++++ b/.github/workflows/sync_repo.yml
+@@ -12,7 +12,7 @@ jobs:
+     name: Sync Repository
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v5
++        uses: actions/checkout@v6
+         with:
+           fetch-depth: 0
+ 
+diff --git a/package.json b/package.json
+index 02ba047e9..3233776a6 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@openlist-frontend/openlist-frontend",
+-  "version": "4.1.8",
++  "version": "4.1.9",
+   "type": "module",
+   "author": {
+     "name": "The OpenList Projects Contributors",
+@@ -41,58 +41,58 @@
+     "@types/crypto-js": "^4.2.2",
+     "@types/mark.js": "^8.11.12",
+     "@types/node": "^22.0.0",
+-    "@types/qrcode": "^1.5.5",
++    "@types/qrcode": "^1.5.6",
+     "@types/sha256": "^0.2.2",
+     "@types/streamsaver": "^2.0.5",
+     "@vitejs/plugin-legacy": "^6.1.1",
+-    "cross-env": "^7.0.3",
+-    "husky": "^9.0.0",
+-    "lint-staged": "^16.0.0",
+-    "mermaid": "^11.9.0",
++    "cross-env": "^10.1.0",
++    "husky": "^9.1.7",
++    "lint-staged": "^16.2.7",
++    "mermaid": "^11.12.2",
+     "prettier": "3.6.2",
+-    "terser": "^5.43.1",
+-    "typescript": "^5.8.3",
+-    "vite": "^6.3.5",
+-    "vite-plugin-dynamic-base": "^1.0.0",
+-    "vite-plugin-solid": "^2.11.7",
+-    "vite-plugin-static-copy": "^3.1.1"
++    "terser": "^5.44.1",
++    "typescript": "^5.9.3",
++    "vite": "^6.4.1",
++    "vite-plugin-dynamic-base": "^1.2.0",
++    "vite-plugin-solid": "^2.11.10",
++    "vite-plugin-static-copy": "^3.1.4"
+   },
+   "dependencies": {
+     "@egjs/view360": "4.0.0-beta.7",
+     "@github/webauthn-json": "^2.1.1",
+     "@hope-ui/solid": "0.6.7",
+-    "@monaco-editor/loader": "^1.5.0",
+-    "@ruffle-rs/ruffle": "0.2.0-nightly.2025.8.3",
++    "@monaco-editor/loader": "1.7.0",
++    "@ruffle-rs/ruffle": "0.2.0-nightly.2025.12.15",
+     "@solid-primitives/i18n": "^2.2.1",
+-    "@solid-primitives/keyboard": "^1.3.1",
++    "@solid-primitives/keyboard": "^1.3.3",
+     "@solid-primitives/storage": "^1.3.11",
+     "@solidjs/router": "^0.9.1",
+     "@stitches/core": "^1.2.8",
+     "@types/ini": "^4.1.1",
+     "@viselect/vanilla": "^3.9.0",
+     "aplayer": "^1.10.1",
+-    "artplayer": "^5.2.3",
+-    "artplayer-plugin-danmuku": "^5.1.6",
+-    "asciinema-player": "^3.10.0",
+-    "axios": "^1.9.0",
++    "artplayer": "^5.3.0",
++    "artplayer-plugin-danmuku": "^5.2.0",
++    "asciinema-player": "^3.12.1",
++    "axios": "^1.13.2",
+     "bencode": "^4.0.0",
+-    "chardet": "^2.1.0",
++    "chardet": "^2.1.1",
+     "clsx": "^2.1.1",
+     "copy-to-clipboard": "^3.3.3",
+     "crypto-js": "^4.2.0",
+     "docx-preview": "^0.3.7",
+     "handlebars": "^4.7.8",
+     "hash-wasm": "^4.12.0",
+-    "hls.js": "^1.6.5",
++    "hls.js": "^1.6.15",
+     "ini": "^6.0.0",
+     "just-once": "^2.2.0",
+     "katex": "0.16.25",
+     "libass-wasm": "^4.1.0",
+     "libheif-js": "^1.19.8",
+-    "lightgallery": "^2.8.3",
++    "lightgallery": "^2.9.0",
+     "mark.js": "^8.11.1",
+     "mitt": "^3.0.1",
+-    "monaco-editor": "^0.55.0",
++    "monaco-editor": "0.55.1",
+     "mpegts.js": "^1.8.0",
+     "qrcode": "^1.5.4",
+     "rehype-katex": "6.0.3",
+@@ -103,7 +103,7 @@
+     "sha256": "^0.2.0",
+     "solid-contextmenu": "0.0.2",
+     "solid-icons": "^1.1.0",
+-    "solid-js": "^1.9.7",
++    "solid-js": "^1.9.10",
+     "solid-markdown": "^1.2.2",
+     "solid-motionone": "^1.0.4",
+     "solid-transition-group": "^0.3.0",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index fed2ee5aa..7669ac3d1 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -18,16 +18,16 @@ importers:
+         specifier: 0.6.7
+         version: 0.6.7(@stitches/core@1.2.8)(solid-js@1.9.10)(solid-transition-group@0.3.0(solid-js@1.9.10))
+       '@monaco-editor/loader':
+-        specifier: ^1.5.0
+-        version: 1.6.1
++        specifier: 1.7.0
++        version: 1.7.0
+       '@ruffle-rs/ruffle':
+-        specifier: 0.2.0-nightly.2025.8.3
+-        version: 0.2.0-nightly.2025.8.3
++        specifier: 0.2.0-nightly.2025.12.15
++        version: 0.2.0-nightly.2025.12.15
+       '@solid-primitives/i18n':
+         specifier: ^2.2.1
+         version: 2.2.1(solid-js@1.9.10)
+       '@solid-primitives/keyboard':
+-        specifier: ^1.3.1
++        specifier: ^1.3.3
+         version: 1.3.3(solid-js@1.9.10)
+       '@solid-primitives/storage':
+         specifier: ^1.3.11
+@@ -48,22 +48,22 @@ importers:
+         specifier: ^1.10.1
+         version: 1.10.1
+       artplayer:
+-        specifier: ^5.2.3
++        specifier: ^5.3.0
+         version: 5.3.0
+       artplayer-plugin-danmuku:
+-        specifier: ^5.1.6
++        specifier: ^5.2.0
+         version: 5.2.0
+       asciinema-player:
+-        specifier: ^3.10.0
++        specifier: ^3.12.1
+         version: 3.12.1
+       axios:
+-        specifier: ^1.9.0
++        specifier: ^1.13.2
+         version: 1.13.2
+       bencode:
+         specifier: ^4.0.0
+         version: 4.0.0
+       chardet:
+-        specifier: ^2.1.0
++        specifier: ^2.1.1
+         version: 2.1.1
+       clsx:
+         specifier: ^2.1.1
+@@ -84,7 +84,7 @@ importers:
+         specifier: ^4.12.0
+         version: 4.12.0
+       hls.js:
+-        specifier: ^1.6.5
++        specifier: ^1.6.15
+         version: 1.6.15
+       ini:
+         specifier: ^6.0.0
+@@ -102,7 +102,7 @@ importers:
+         specifier: ^1.19.8
+         version: 1.19.8
+       lightgallery:
+-        specifier: ^2.8.3
++        specifier: ^2.9.0
+         version: 2.9.0
+       mark.js:
+         specifier: ^8.11.1
+@@ -111,7 +111,7 @@ importers:
+         specifier: ^3.0.1
+         version: 3.0.1
+       monaco-editor:
+-        specifier: ^0.55.0
++        specifier: 0.55.1
+         version: 0.55.1
+       mpegts.js:
+         specifier: ^1.8.0
+@@ -144,7 +144,7 @@ importers:
+         specifier: ^1.1.0
+         version: 1.1.0(solid-js@1.9.10)
+       solid-js:
+-        specifier: ^1.9.7
++        specifier: ^1.9.10
+         version: 1.9.10
+       solid-markdown:
+         specifier: ^1.2.2
+@@ -181,7 +181,7 @@ importers:
+         specifier: ^22.0.0
+         version: 22.19.0
+       '@types/qrcode':
+-        specifier: ^1.5.5
++        specifier: ^1.5.6
+         version: 1.5.6
+       '@types/sha256':
+         specifier: ^0.2.2
+@@ -193,37 +193,37 @@ importers:
+         specifier: ^6.1.1
+         version: 6.1.1(terser@5.44.1)(vite@6.4.1(@types/node@22.19.0)(terser@5.44.1)(yaml@2.8.1))
+       cross-env:
+-        specifier: ^7.0.3
+-        version: 7.0.3
++        specifier: ^10.1.0
++        version: 10.1.0
+       husky:
+-        specifier: ^9.0.0
++        specifier: ^9.1.7
+         version: 9.1.7
+       lint-staged:
+-        specifier: ^16.0.0
+-        version: 16.2.6
++        specifier: ^16.2.7
++        version: 16.2.7
+       mermaid:
+-        specifier: ^11.9.0
+-        version: 11.12.1
++        specifier: ^11.12.2
++        version: 11.12.2
+       prettier:
+         specifier: 3.6.2
+         version: 3.6.2
+       terser:
+-        specifier: ^5.43.1
++        specifier: ^5.44.1
+         version: 5.44.1
+       typescript:
+-        specifier: ^5.8.3
++        specifier: ^5.9.3
+         version: 5.9.3
+       vite:
+-        specifier: ^6.3.5
++        specifier: ^6.4.1
+         version: 6.4.1(@types/node@22.19.0)(terser@5.44.1)(yaml@2.8.1)
+       vite-plugin-dynamic-base:
+-        specifier: ^1.0.0
++        specifier: ^1.2.0
+         version: 1.2.0(vite@6.4.1(@types/node@22.19.0)(terser@5.44.1)(yaml@2.8.1))
+       vite-plugin-solid:
+-        specifier: ^2.11.7
++        specifier: ^2.11.10
+         version: 2.11.10(solid-js@1.9.10)(vite@6.4.1(@types/node@22.19.0)(terser@5.44.1)(yaml@2.8.1))
+       vite-plugin-static-copy:
+-        specifier: ^3.1.1
++        specifier: ^3.1.4
+         version: 3.1.4(vite@6.4.1(@types/node@22.19.0)(terser@5.44.1)(yaml@2.8.1))
+ 
+ packages:
+@@ -816,6 +816,9 @@ packages:
+   '@egjs/view360@4.0.0-beta.7':
+     resolution: {integrity: sha512-prVTTxuQ1/k59NM7G0tm58k2vPHGoaExoFr5E7MoJaSGF56Otj4okQHAxxosXH87aQLN0feZMtBlsKz0b/7zEw==}
+ 
++  '@epic-web/invariant@1.0.0':
++    resolution: {integrity: sha512-lrTPqgvfFQtR/eY/qkIzp98OGdNJu0m5ji3q/nJI8v3SXkRKEnWiOxMmbvcSoAIzv/cGiuvRy57k4suKQSAdwA==}
++
+   '@esbuild/aix-ppc64@0.25.11':
+     resolution: {integrity: sha512-Xt1dOL13m8u0WE8iplx9Ibbm+hFAO0GsU2P34UNoDGvZYkY8ifSiy6Zuc1lYxfG7svWE2fzqCUmFp5HCn51gJg==}
+     engines: {node: '>=18'}
+@@ -1035,8 +1038,8 @@ packages:
+   '@mermaid-js/parser@0.6.3':
+     resolution: {integrity: sha512-lnjOhe7zyHjc+If7yT4zoedx2vo4sHaTmtkl1+or8BRTnCtDmcTpAjpzDSfCZrshM5bCoz0GyidzadJAH1xobA==}
+ 
+-  '@monaco-editor/loader@1.6.1':
+-    resolution: {integrity: sha512-w3tEnj9HYEC73wtjdpR089AqkUPskFRcdkxsiSFt3SoUc3OHpmu+leP94CXBm4mHfefmhsdfI0ZQu6qJ0wgtPg==}
++  '@monaco-editor/loader@1.7.0':
++    resolution: {integrity: sha512-gIwR1HrJrrx+vfyOhYmCZ0/JcWqG5kbfG7+d3f/C1LXk2EvzAbHSg3MQ5lO2sMlo9izoAZ04shohfKLVT6crVA==}
+ 
+   '@motionone/animation@10.18.0':
+     resolution: {integrity: sha512-9z2p5GFGCm0gBsZbi8rVMOAJCtw1WqBTIPw3ozk06gDvZInBPIsQcHgYogEJ4yuHJ+akuW8g1SEIOpTOvYs8hw==}
+@@ -1166,8 +1169,8 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@ruffle-rs/ruffle@0.2.0-nightly.2025.8.3':
+-    resolution: {integrity: sha512-3Xn0AEYt84bioRE4HQSALbB+5g/hP04j2P0eCB+fYFj06MGc+7AhlWFas9apE1S4UTJN3TR/WmRMVUGmeouspw==}
++  '@ruffle-rs/ruffle@0.2.0-nightly.2025.12.15':
++    resolution: {integrity: sha512-tTMaDxf2+zFl5mxdQrN7yltFxUyEMd044ALbg+eLbJnAkDacGZP3rw/iI54JU+veDtAcMw7ZRKBnPUXZEDmM9Q==}
+ 
+   '@solid-primitives/event-listener@2.4.3':
+     resolution: {integrity: sha512-h4VqkYFv6Gf+L7SQj+Y6puigL/5DIi7x5q07VZET7AWcS+9/G3WfIE9WheniHWJs51OEkRB43w6lDys5YeFceg==}
+@@ -1769,9 +1772,9 @@ packages:
+   cose-base@2.2.0:
+     resolution: {integrity: sha512-AzlgcsCbUMymkADOJtQm3wO9S3ltPfYOFD5033keQn9NJzIbtnZj+UdBJe7DYml/8TdbtHJW3j58SOnKhWY/5g==}
+ 
+-  cross-env@7.0.3:
+-    resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
+-    engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
++  cross-env@10.1.0:
++    resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
++    engines: {node: '>=20'}
+     hasBin: true
+ 
+   cross-spawn@7.0.6:
+@@ -2403,8 +2406,8 @@ packages:
+     resolution: {integrity: sha512-58Ud1DyhD2ao58t+kPEqSZrjFxg23tGd5ZKr75erm7q31g5xhUtWUJH3sTUkhHzlyJAKHj5eTrJ37HQRXG4Wbg==}
+     engines: {node: '>=6.0.0'}
+ 
+-  lint-staged@16.2.6:
+-    resolution: {integrity: sha512-s1gphtDbV4bmW1eylXpVMk2u7is7YsrLl8hzrtvC70h4ByhcMLZFY01Fx05ZUDNuv1H8HO4E+e2zgejV1jVwNw==}
++  lint-staged@16.2.7:
++    resolution: {integrity: sha512-lDIj4RnYmK7/kXMya+qJsmkRFkGolciXjrsZ6PC25GdTfWOAWetR0ZbsNXRAj1EHHImRSalc+whZFg56F5DVow==}
+     engines: {node: '>=20.17'}
+     hasBin: true
+ 
+@@ -2515,8 +2518,8 @@ packages:
+     resolution: {integrity: sha512-eRtbOb1N5iyH0tkQDAoQ4Ipsp/5qSR79Dzrz8hEPxRX10RWWR/iQXdoKmBSRCThY1Fh5EhISDtpSc93fpxUniQ==}
+     engines: {node: '>=12.13'}
+ 
+-  mermaid@11.12.1:
+-    resolution: {integrity: sha512-UlIZrRariB11TY1RtTgUWp65tphtBv4CSq7vyS2ZZ2TgoMjs2nloq+wFqxiwcxlhHUvs7DPGgMjs2aeQxz5h9g==}
++  mermaid@11.12.2:
++    resolution: {integrity: sha512-n34QPDPEKmaeCG4WDMGy0OT6PSyxKCfy2pJgShP+Qow2KLrvWjclwbc3yXfSIf4BanqWEhQEpngWwNp/XhZt6w==}
+ 
+   micromark-core-commonmark@1.1.0:
+     resolution: {integrity: sha512-BgHO1aRbolh2hcrzL2d1La37V0Aoz73ymF8rAcKnohLy93titmv62E0gP8Hrx9PKcKrqCZ1BbLGbP3bEhoXYlw==}
+@@ -4196,6 +4199,8 @@ snapshots:
+       '@types/webxr': 0.5.22
+       gl-matrix: 3.4.3
+ 
++  '@epic-web/invariant@1.0.0': {}
++
+   '@esbuild/aix-ppc64@0.25.11':
+     optional: true
+ 
+@@ -4354,7 +4359,7 @@ snapshots:
+     dependencies:
+       langium: 3.3.1
+ 
+-  '@monaco-editor/loader@1.6.1':
++  '@monaco-editor/loader@1.7.0':
+     dependencies:
+       state-local: 1.0.7
+ 
+@@ -4459,7 +4464,7 @@ snapshots:
+   '@rollup/rollup-win32-x64-msvc@4.52.5':
+     optional: true
+ 
+-  '@ruffle-rs/ruffle@0.2.0-nightly.2025.8.3': {}
++  '@ruffle-rs/ruffle@0.2.0-nightly.2025.12.15': {}
+ 
+   '@solid-primitives/event-listener@2.4.3(solid-js@1.9.10)':
+     dependencies:
+@@ -5066,8 +5071,9 @@ snapshots:
+     dependencies:
+       layout-base: 2.0.1
+ 
+-  cross-env@7.0.3:
++  cross-env@10.1.0:
+     dependencies:
++      '@epic-web/invariant': 1.0.0
+       cross-spawn: 7.0.6
+ 
+   cross-spawn@7.0.6:
+@@ -5737,7 +5743,7 @@ snapshots:
+ 
+   lightgallery@2.9.0: {}
+ 
+-  lint-staged@16.2.6:
++  lint-staged@16.2.7:
+     dependencies:
+       commander: 14.0.2
+       listr2: 9.0.5
+@@ -5929,7 +5935,7 @@ snapshots:
+     dependencies:
+       is-what: 4.1.16
+ 
+-  mermaid@11.12.1:
++  mermaid@11.12.2:
+     dependencies:
+       '@braintree/sanitize-url': 7.1.1
+       '@iconify/utils': 3.0.2
+diff --git a/renovate.json b/renovate.json
+index 22a994324..da33ecf7f 100644
+--- a/renovate.json
++++ b/renovate.json
+@@ -1,4 +1,5 @@
+ {
+   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+-  "extends": ["config:recommended"]
++  "extends": ["config:recommended"],
++  "rangeStrategy": "bump"
+ }
+diff --git a/src/components/FolderTree.tsx b/src/components/FolderTree.tsx
+index ef1a31680..915605e65 100644
+--- a/src/components/FolderTree.tsx
++++ b/src/components/FolderTree.tsx
+@@ -17,6 +17,7 @@ import {
+   VStack,
+ } from "@hope-ui/solid"
+ import { BiSolidRightArrow, BiSolidFolderOpen } from "solid-icons/bi"
++import { TbX, TbCheck } from "solid-icons/tb"
+ import {
+   Accessor,
+   createContext,
+@@ -28,6 +29,7 @@ import {
+   createEffect,
+   on,
+   JSXElement,
++  onMount,
+ } from "solid-js"
+ import { useFetch, useT, useUtil } from "~/hooks"
+ import { getMainColor, password } from "~/store"
+@@ -35,14 +37,19 @@ import { Obj } from "~/types"
+ import {
+   pathBase,
+   handleResp,
++  handleRespWithNotifySuccess,
+   hoverColor,
+   pathJoin,
+   fsDirs,
+   createMatcher,
++  fsMkdir,
++  validateFilename,
++  notify,
+ } from "~/utils"
+ 
+ export type FolderTreeHandler = {
+   setPath: Setter<string>
++  startCreateFolder: () => void
+ }
+ export interface FolderTreeProps {
+   onChange: (path: string) => void
+@@ -54,11 +61,25 @@ export interface FolderTreeProps {
+ }
+ interface FolderTreeContext extends Omit<FolderTreeProps, "handle"> {
+   value: Accessor<string>
++  creatingFolderPath: Accessor<string | null>
++  setCreatingFolderPath: Setter<string | null>
+ }
+ const context = createContext<FolderTreeContext>()
+ export const FolderTree = (props: FolderTreeProps) => {
+   const [path, setPath] = createSignal("/")
+-  props.handle?.({ setPath })
++  const [creatingFolderPath, setCreatingFolderPath] = createSignal<
++    string | null
++  >(null)
++
++  const startCreateFolder = () => {
++    setCreatingFolderPath(path())
++  }
++
++  props.handle?.({
++    setPath,
++    startCreateFolder,
++  })
++
+   return (
+     <Box class="folder-tree-box" w="$full" overflowX="auto">
+       <context.Provider
+@@ -72,6 +93,8 @@ export const FolderTree = (props: FolderTreeProps) => {
+           forceRoot: props.forceRoot ?? false,
+           showEmptyIcon: props.showEmptyIcon ?? false,
+           showHiddenFolder: props.showHiddenFolder ?? true,
++          creatingFolderPath,
++          setCreatingFolderPath,
+         }}
+       >
+         <FolderTreeNode path="/" />
+@@ -90,6 +113,8 @@ const FolderTreeNode = (props: { path: string }) => {
+     autoOpen,
+     showEmptyIcon,
+     showHiddenFolder,
++    creatingFolderPath,
++    setCreatingFolderPath,
+   } = useContext(context)!
+   const emptyIconVisible = () =>
+     Boolean(showEmptyIcon && children() !== undefined && !children()?.length)
+@@ -97,8 +122,8 @@ const FolderTreeNode = (props: { path: string }) => {
+     fsDirs(props.path, password(), forceRoot),
+   )
+   let isLoaded = false
+-  const load = async () => {
+-    if (children()?.length) return
++  const load = async (force = false) => {
++    if (!force && children()?.length) return
+     const resp = await fetchDirs() // this api may return null
+     handleResp(
+       resp,
+@@ -122,6 +147,14 @@ const FolderTreeNode = (props: { path: string }) => {
+     }
+   }
+   createEffect(on(value, checkIfShouldOpen))
++
++  createEffect(() => {
++    if (creatingFolderPath() === props.path) {
++      if (!isOpen()) onToggle()
++      if (!isLoaded) load()
++    }
++  })
++
+   const isHiddenFolder = () =>
+     isHidePath(props.path) && !isMatchedFolder(value())
+   return (
+@@ -179,6 +212,17 @@ const FolderTreeNode = (props: { path: string }) => {
+                 <FolderTreeNode path={pathJoin(props.path, item.name)} />
+               )}
+             </For>
++            <Show when={creatingFolderPath() === props.path}>
++              <FolderNameInput
++                parentPath={props.path}
++                onCancel={() => setCreatingFolderPath(null)}
++                onSuccess={(fullPath) => {
++                  setCreatingFolderPath(null)
++                  onChange(fullPath)
++                  load(true)
++                }}
++              />
++            </Show>
+           </VStack>
+         </Show>
+       </Box>
+@@ -186,25 +230,138 @@ const FolderTreeNode = (props: { path: string }) => {
+   )
+ }
+ 
++const FOCUS_DELAY_MS = 0 // allow DOM to mount before focusing
++
++const FolderNameInput = (props: {
++  parentPath: string
++  onCancel: () => void
++  onSuccess: (fullPath: string) => void
++}) => {
++  const t = useT()
++  const [folderName, setFolderName] = createSignal("")
++  const [loading, mkdir] = useFetch(fsMkdir)
++
++  const handleSubmit = async () => {
++    const name = folderName().trim()
++    if (!name || loading()) return
++
++    const validation = validateFilename(name)
++    if (!validation.valid) {
++      notify.warning(t(`global.${validation.error}`))
++      return
++    }
++
++    const fullPath = pathJoin(props.parentPath, name)
++    const resp = await mkdir(fullPath)
++    handleRespWithNotifySuccess(
++      resp,
++      () => {
++        props.onSuccess(fullPath)
++      },
++      () => {
++        props.onCancel()
++      },
++    )
++  }
++
++  let inputRef: HTMLInputElement | undefined
++
++  onMount(() => {
++    setTimeout(() => {
++      inputRef?.focus()
++      inputRef?.select()
++    }, FOCUS_DELAY_MS)
++  })
++
++  return (
++    <HStack spacing="$2" w="$full" pl="$4" alignItems="center">
++      <Icon color={getMainColor()} as={BiSolidFolderOpen} />
++      <Input
++        ref={(el) => (inputRef = el)}
++        value={folderName()}
++        onInput={(e) => setFolderName(e.currentTarget.value)}
++        placeholder={t("home.toolbar.input_dir_name")}
++        size="sm"
++        flex="1"
++        onKeyDown={(e) => {
++          if (e.key === "Enter") {
++            e.preventDefault()
++            handleSubmit()
++          } else if (e.key === "Escape") {
++            props.onCancel()
++          }
++        }}
++        onBlur={(e) => {
++          if (loading()) return
++          const next = e.relatedTarget as HTMLElement | null
++          if (next?.dataset.folderAction === "true") return
++          if (!folderName().trim()) {
++            props.onCancel()
++          }
++        }}
++      />
++      <Show
++        when={!loading()}
++        fallback={<Spinner size="sm" color={getMainColor()} />}
++      >
++        <Button
++          aria-label={t("global.ok")}
++          size="sm"
++          variant="ghost"
++          rounded="$md"
++          p="$1"
++          color="$success9"
++          onClick={handleSubmit}
++          tabIndex={0}
++          data-folder-action="true"
++        >
++          <Icon as={TbCheck} boxSize="$6" />
++        </Button>
++      </Show>
++      <Button
++        aria-label={t("global.cancel")}
++        size="sm"
++        variant="ghost"
++        rounded="$md"
++        p="$1"
++        color="$danger9"
++        onClick={props.onCancel}
++        tabIndex={0}
++        data-folder-action="true"
++      >
++        <Icon as={TbX} boxSize="$6" />
++      </Button>
++    </HStack>
++  )
++}
++
+ export type ModalFolderChooseProps = {
+   opened: boolean
+   onClose: () => void
+   onSubmit?: (text: string) => void
+   type?: string
+-  defaultValue?: string
++  defaultValue?: string | (() => string)
+   loading?: boolean
+   footerSlot?: JSXElement
++  headerSlot?: (handler: FolderTreeHandler | undefined) => JSXElement
+   children?: JSXElement
+   header: string
+ }
+ export const ModalFolderChoose = (props: ModalFolderChooseProps) => {
+   const t = useT()
+-  const [value, setValue] = createSignal(props.defaultValue ?? "/")
++  const [value, setValue] = createSignal("/")
+   const [handler, setHandler] = createSignal<FolderTreeHandler>()
+   createEffect(() => {
+     if (!props.opened) return
+     handler()?.setPath(value())
+   })
++  if (typeof props.defaultValue === "function") {
++    createEffect(() => {
++      setValue((props.defaultValue as () => string)())
++    })
++  } else if (typeof props.defaultValue === "string") {
++    setValue(props.defaultValue)
++  }
+   return (
+     <Modal
+       size="xl"
+@@ -216,7 +373,12 @@ export const ModalFolderChoose = (props: ModalFolderChooseProps) => {
+       <ModalContent>
+         {/* <ModalCloseButton /> */}
+         <ModalHeader w="$full" css={{ overflowWrap: "break-word" }}>
+-          {props.header}
++          <HStack w="$full" justifyContent="space-between" alignItems="center">
++            <Box css={{ overflowWrap: "break-word" }}>{props.header}</Box>
++            <Show when={props.headerSlot && handler()}>
++              {props.headerSlot!(handler()!)}
++            </Show>
++          </HStack>
+         </ModalHeader>
+         <ModalBody>
+           {props.children}
+diff --git a/src/hooks/useCDN.ts b/src/hooks/useCDN.ts
+index 4878a5713..de6f99ece 100644
+--- a/src/hooks/useCDN.ts
++++ b/src/hooks/useCDN.ts
+@@ -6,16 +6,16 @@ export const useCDN = () => {
+ 
+   const npm = (name: string, version: string, path: string) => {
+     // Available: https://github.com/cnpm/unpkg-white-list
+-    // https://registry.npmmirror.com/monaco-editor/0.52.2/files/min/vs/loader.js
++    // https://registry.npmmirror.com/monaco-editor/0.55.1/files/min/vs/loader.js
+     return `https://registry.npmmirror.com/${name}/${version}/files/${path}`
+ 
+-    // https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js
++    // https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js
+     // return `https://cdn.jsdelivr.net/npm/${name}@${version}/${path}`
+   }
+ 
+   const monacoPath = () => {
+     return import.meta.env.VITE_LITE === "true"
+-      ? npm("monaco-editor", "0.52.2", "min/vs")
++      ? npm("monaco-editor", "0.55.1", "min/vs")
+       : `${static_path}/monaco-editor/vs`
+   }
+ 
+diff --git a/src/hooks/useLink.ts b/src/hooks/useLink.ts
+index be75c3da9..4bc32b762 100644
+--- a/src/hooks/useLink.ts
++++ b/src/hooks/useLink.ts
+@@ -1,5 +1,5 @@
+ import { objStore, selectedObjs, State, me } from "~/store"
+-import { Obj } from "~/types"
++import { Obj, ArchiveObj } from "~/types"
+ import {
+   base_path,
+   api,
+@@ -21,16 +21,13 @@ export const getLinkByDirAndObj = (
+   isShare: boolean,
+   encodeAll?: boolean,
+ ) => {
+-  let path
+-  if (isShare) {
+-    path = standardizePath(obj.path, true)
+-    if (type === "preview") path = `/@s${path}`
+-  } else {
+-    if (type !== "preview") dir = pathJoin(me().base_path, dir)
+-    dir = standardizePath(dir, true)
+-    path = `${dir}/${obj.name}`
+-  }
++  if (type !== "preview")
++    dir = isShare
++      ? dir.substring(3) /* remove /@s */
++      : pathJoin(me().base_path, dir)
+ 
++  dir = standardizePath(dir, true)
++  let path = `${dir}/${obj.name}`
+   path = encodePath(path, encodeAll)
+   let host = api
+   let prefix = isShare ? "/sd" : type === "direct" ? "/d" : "/p"
+@@ -39,6 +36,12 @@ export const getLinkByDirAndObj = (
+     if (!api.startsWith(location.origin + base_path))
+       host = location.origin + base_path
+   }
++  const { inner_path, archive } = obj as ArchiveObj
++  if (archive) {
++    prefix = "/ae"
++    path = `${dir}/${archive.name}`
++    path = encodePath(path, encodeAll)
++  }
+   let ans = `${host}${prefix}${path}`
+   if (type !== "preview" && !isShare && obj.sign) {
+     ans += `?sign=${obj.sign}`
+@@ -49,6 +52,10 @@ export const getLinkByDirAndObj = (
+       ans += `?pwd=${pwd}`
+     }
+   }
++  if (archive) {
++    let inner = `${inner_path}/${obj.name}`
++    ans += `${ans.includes("?") ? "&" : "?"}inner=${encodePath(inner, encodeAll)}`
++  }
+   return ans
+ }
+ 
+diff --git a/src/lang/en/br.json b/src/lang/en/br.json
+index 0af3ef079..498d23fd1 100644
+--- a/src/lang/en/br.json
++++ b/src/lang/en/br.json
+@@ -1,17 +1,17 @@
+ {
+   "backup": "Backup",
+   "restore": "Restore",
+-  "start_backup": "Start backup",
+-  "finish_backup": "Finish backup",
++  "start_backup": "Start Backup",
++  "finish_backup": "Finish Backup",
+   "success_backup_item": "[ {{item}} ] Backup was successful",
+   "failed_backup_item": "[ {{item}} ] Backup failed",
+   "no_file": "No file selected",
+-  "start_restore": "Start restore",
+-  "finish_restore": "Finish restore",
++  "start_restore": "Start Restore",
++  "finish_restore": "Finish Restore",
+   "success_restore_item": "[ {{item}} ] Restore was successful",
+   "failed_restore_item": "[ {{item}} ] Restore failed",
+   "override": "Override",
+   "encrypt_password_placeholder": "Leave empty if you don't need encryption",
+-  "encrypt_password": "Encryption password",
++  "encrypt_password": "Encryption Password",
+   "wrong_encrypt_password": "Wrong encryption password"
+ }
+diff --git a/src/lang/en/drivers.json b/src/lang/en/drivers.json
+index 31d20e411..bac494736 100755
+--- a/src/lang/en/drivers.json
++++ b/src/lang/en/drivers.json
+@@ -37,6 +37,8 @@
+       "asc": "Asc",
+       "desc": "Desc"
+     },
++    "page_size": "Page size",
++    "page_size-tips": "list api per page size of 115open driver",
+     "refresh_token": "Refresh token",
+     "root_folder_id": "Root folder id"
+   },
+@@ -109,6 +111,9 @@
+     "cloud_id": "Cloud id",
+     "custom_upload_part_size": "Custom upload part size",
+     "custom_upload_part_size-tips": "0 for auto",
++    "mail_cookies": "Mail cookies",
++    "mail_cookies-tips": "Cookies from mail.139.com used for login authentication.",
++    "password": "Password",
+     "report_real_size": "Report real size",
+     "report_real_size-tips": "Enable to report the real file size during upload",
+     "root_folder_id": "Root folder id",
+@@ -122,7 +127,8 @@
+     "use_large_thumbnail": "Use large thumbnail",
+     "use_large_thumbnail-tips": "Enable to use large thumbnail for images",
+     "user_domain_id": "User domain id",
+-    "user_domain_id-tips": "ud_id in Cookie, fill in to show disk usage"
++    "user_domain_id-tips": "ud_id in Cookie, fill in to show disk usage",
++    "username": "Username"
+   },
+   "189Cloud": {
+     "cookie": "Cookie",
+@@ -196,18 +202,55 @@
+     "upload_thread": "Upload thread",
+     "upload_thread-tips": "1\u003c=thread\u003c=32"
+   },
++  "AList V3": {
++    "forward_archive_requests": "Forward archive requests",
++    "meta_password": "Meta password",
++    "pass_ip_to_upsteam": "Pass ip to upsteam",
++    "pass_ua_to_upsteam": "Pass ua to upsteam",
++    "password": "Password",
++    "root_folder_path": "Root folder path",
++    "token": "Token",
++    "url": "Url",
++    "username": "Username"
++  },
+   "Alias": {
+     "details_pass_through": "Details pass through",
+     "download_concurrency": "Download concurrency",
+     "download_concurrency-tips": "Need to enable proxy",
+     "download_part_size": "Download part size",
+     "download_part_size-tips": "Need to enable proxy. Unit: KB",
+-    "parallel_write": "Parallel write",
++    "file_consistency_check": "File consistency check",
+     "paths": "Paths",
+-    "protect_same_name": "Protect same name",
+-    "protect_same_name-tips": "Protects same-name files from Delete or Rename",
+     "provider_pass_through": "Provider pass through",
+-    "writable": "Writable"
++    "put_conflict_policy": "Putting conflict policy",
++    "put_conflict_policy-tips": "How the driver handles identical backend paths when uploading, copying, moving, or decompressing.",
++    "put_conflict_policys": {
++      "all": "Put into all conflict paths",
++      "all_strict": "Allow full conflict paths",
++      "deterministic": "Allow unique path",
++      "deterministic_or_all": "Allow unique path and full conflict paths",
++      "disabled": "Disable putting",
++      "first": "Put into the first conflict path",
++      "quota": "Weighted random load balancing based on remaining space",
++      "quota_strict": "Strict weighted random load balancing based on remaining space",
++      "random": "Random load balancing"
++    },
++    "read_conflict_policy": "Reading conflict policy",
++    "read_conflict_policys": {
++      "all": "Load balancing on a per-part basis",
++      "first": "Get the file corresponding to the first conflict path",
++      "random": "Load balancing on a per-file basis"
++    },
++    "write_conflict_policy": "Writing conflict policy",
++    "write_conflict_policy-tips": "How the driver handles identical backend paths when renaming, removing, or making directories.",
++    "write_conflict_policys": {
++      "all": "Write into all conflict paths",
++      "all_strict": "Allow full conflict paths",
++      "deterministic": "Allow unique path",
++      "deterministic_or_all": "Allow unique path and full conflict paths",
++      "disabled": "Disable writing",
++      "first": "Write into the first conflict path"
++    }
+   },
+   "Aliyundrive": {
+     "internal_upload": "Internal upload",
+@@ -299,6 +342,7 @@
+     "container_name-tips": "The name of the container in Azure Storage (created in the Azure portal). https://learn.microsoft.com/azure/storage/blobs/blob-containers-portal",
+     "endpoint": "Endpoint",
+     "endpoint-tips": "e.g. https://accountname.blob.core.windows.net/. The full endpoint URL for Azure Storage, including the unique storage account name (3 ~ 24 numbers and lowercase letters only).",
++    "root_folder_path": "Root folder path",
+     "sign_url_expire": "Sign url expire",
+     "sign_url_expire-tips": "The expiration time for SAS URLs, in hours."
+   },
+@@ -356,7 +400,7 @@
+     "default_branch": "Default branch",
+     "default_branch-tips": "Default branch for new releases",
+     "repo": "Repo",
+-    "root_folder_path": "Root folder path",
++    "root_folder_id": "Root folder id",
+     "token": "Token",
+     "use_tag_name": "Use tag name",
+     "use_tag_name-tips": "Use tag name instead of release name"
+@@ -574,7 +618,7 @@
+     "gh_proxy-tips": "GitHub proxy, e.g. https://ghproxy.net/github.com or https://gh-proxy.com/github.com ",
+     "repo_structure": "Repo structure",
+     "repo_structure-tips": "structure:[path:]org/repo",
+-    "root_folder_id": "Root folder id",
++    "root_folder_path": "Root folder path",
+     "show_all_version": "Show all version",
+     "show_all_version-tips": "show all versions",
+     "show_readme": "Show readme",
+@@ -705,7 +749,7 @@
+   "MediaFire": {
+     "chunk_size": "Chunk size",
+     "cookie": "Cookie",
+-    "cookie-tips": "Required for navigation",
++    "cookie-tips": "Required for MediaFire API authentication",
+     "limit_rate": "Limit rate",
+     "limit_rate-tips": "limit all api request rate ([limit]r/1s)",
+     "order_by": "Order by",
+@@ -721,7 +765,7 @@
+     },
+     "root_folder_path": "Root folder path",
+     "session_token": "Session token",
+-    "session_token-tips": "Required for MediaFire API",
++    "session_token-tips": "Optional for MediaFire API, can be auto-acquired from cookie",
+     "upload_threads": "Upload threads",
+     "upload_threads-tips": "concurrent upload threads"
+   },
+@@ -997,8 +1041,17 @@
+     "username": "Username"
+   },
+   "Strm": {
++    "KeepLocalDownloadFile": "KeepLocalDownloadFile",
++    "KeepLocalDownloadFile-tips": "keep local download files",
+     "PathPrefix": "PathPrefix",
+     "PathPrefix-tips": "Path prefix",
++    "SaveLocalMode": "SaveLocalMode",
++    "SaveLocalMode-tips": "save strm file locally mode",
++    "SaveLocalModes": {
++      "insert": "Insert",
++      "sync": "Sync",
++      "update": "Update"
++    },
+     "SaveStrmLocalPath": "SaveStrmLocalPath",
+     "SaveStrmLocalPath-tips": "save strm file local path",
+     "SaveStrmToLocal": "SaveStrmToLocal",
+@@ -1012,6 +1065,7 @@
+     "paths": "Paths",
+     "siteUrl": "SiteUrl",
+     "siteUrl-tips": "The prefix URL of the strm file",
++    "withSign": "WithSign",
+     "withoutUrl": "WithoutUrl",
+     "withoutUrl-tips": "strm file content without URL prefix"
+   },
+@@ -1287,6 +1341,15 @@
+     "num_folder": "Num folder",
+     "root_folder_path": "Root folder path"
+   },
++  "WPS": {
++    "cookie": "Cookie",
++    "mode": "Mode",
++    "modes": {
++      "Business": "Business",
++      "Personal": "Personal"
++    },
++    "root_folder_path": "Root folder path"
++  },
+   "WebDav": {
+     "address": "Address",
+     "password": "Password",
+@@ -1367,6 +1430,7 @@
+     },
+     "189CloudPC": {},
+     "189CloudTV": {},
++    "AList V3": {},
+     "Alias": {},
+     "Aliyundrive": {
+       "alert": "There may be an infinite loop bug in this driver.\nDeprecated, no longer maintained and will be removed in a future version.\nWe recommend using the official driver AliyundriveOpen."
+@@ -1440,6 +1504,7 @@
+     "USS": {},
+     "UrlTree": {},
+     "Virtual": {},
++    "WPS": {},
+     "WebDav": {},
+     "WeiYun": {},
+     "WoPan": {},
+@@ -1457,6 +1522,7 @@
+     "189Cloud": "189Cloud",
+     "189CloudPC": "189CloudPC",
+     "189CloudTV": "189CloudTV",
++    "AList V3": "AList V3",
+     "Alias": "Alias",
+     "Aliyundrive": "Aliyundrive",
+     "AliyundriveOpen": "AliyundriveOpen",
+@@ -1526,6 +1592,7 @@
+     "USS": "USS",
+     "UrlTree": "UrlTree",
+     "Virtual": "Virtual",
++    "WPS": "WPS",
+     "WebDav": "WebDav",
+     "WeiYun": "WeiYun",
+     "WoPan": "WoPan",
+diff --git a/src/lang/en/global.json b/src/lang/en/global.json
+index fa3f5098a..7561b2da5 100644
+--- a/src/lang/en/global.json
++++ b/src/lang/en/global.json
+@@ -6,9 +6,9 @@
+   "save": "Save",
+   "update": "Update",
+   "copied": "Copied",
+-  "delete_success": "Deleted successfully",
+-  "save_success": "Saved successfully",
+-  "update_success": "Updated successfully",
++  "delete_success": "Deleted Successfully",
++  "save_success": "Saved Successfully",
++  "update_success": "Updated Successfully",
+   "choose": "Choose",
+   "confirm": "Confirm",
+   "cancel": "Cancel",
+@@ -17,7 +17,7 @@
+   "yes": "Yes",
+   "no": "No",
+   "clear": "Clear",
+-  "choose_folder": "Select folder",
++  "choose_folder": "Select Folder",
+   "choose_or_input_path": "Select folder or input path",
+   "disable": "Disable",
+   "enable": "Enable",
+@@ -29,6 +29,7 @@
+   "no_support_now": "Not currently supported",
+   "empty_input": "Please enter",
+   "invalid_filename_chars": "Filename cannot contain: / \\ ? < > * : | \"",
++  "invalid_regex": "Invalid regular expression",
+   "name": "Name",
+   "go_to_storages": "Go to Storages"
+ }
+diff --git a/src/lang/en/home.json b/src/lang/en/home.json
+index fc84032c6..29c30a0e7 100644
+--- a/src/lang/en/home.json
++++ b/src/lang/en/home.json
+@@ -99,7 +99,8 @@
+     "regex_rename_preview_old_name": "Old Name",
+     "regex_rename_preview_new_name": "New Name",
+     "regular_rename": "Regular expression file renaming. Input the source file name regular expression on the first line, and input the new file name regular expression on the second line.",
+-    "sequential_renaming_desc": "The new file name will have a numerical starting value appended to it, and it will be displayed sequentially by adding 1 to the starting value. Enter the new file name on the first line and the starting value on the second line.",
++    "sequential_renaming_desc": "The new file name will have a numerical starting value appended to it, and it will be displayed sequentially by adding 1 to the starting value. Enter the new file name on the first line and the starting value on the second line. Supports {number} placeholders.",
++    "sequential_renaming_input3_placeholder": "Padding zeros (optional)",
+     "find_replace": "Find and Replace",
+     "find_replace_desc": "Find and Replace"
+   },
+diff --git a/src/lang/en/settings.json b/src/lang/en/settings.json
+index 7b8390211..1b2b47b4e 100755
+--- a/src/lang/en/settings.json
++++ b/src/lang/en/settings.json
+@@ -51,6 +51,7 @@
+   "ldap_manager_dn": "Ldap manager dn",
+   "ldap_manager_password": "Ldap manager password",
+   "ldap_server": "Ldap server",
++  "ldap_skip_tls_verify": "Ldap skip tls verify",
+   "ldap_user_search_base": "Ldap user search base",
+   "ldap_user_search_filter": "Ldap user search filter",
+   "link_expiration": "Link expiration",
+@@ -62,7 +63,7 @@
+   "max_index_depth-tips": "max depth of index",
+   "max_server_download_speed": "Max server download speed",
+   "max_server_upload_speed": "Max server upload speed",
+-  "non_efs_zip_encoding": "Non efs zip encoding",
++  "non_efs_zip_encoding": "Alternative encoding for ZIP Files",
+   "ocr_api": "Ocr api",
+   "offline_download_task_threads_num": "Offline download task threads num",
+   "offline_download_transfer_task_threads_num": "Offline download transfer task threads num",
+@@ -110,18 +111,18 @@
+   "show_disk_usage_in_plain_text": "Show disk usage in plain text",
+   "sign_all": "Sign all",
+   "site_title": "Site title",
+-  "sso_application_name": "Sso application name",
+-  "sso_auto_register": "Sso auto register",
+-  "sso_client_id": "Sso client id",
+-  "sso_client_secret": "Sso client secret",
+-  "sso_compatibility_mode": "Sso compatibility mode",
+-  "sso_default_dir": "Sso default dir",
+-  "sso_default_permission": "Sso default permission",
+-  "sso_endpoint_name": "Sso endpoint name",
+-  "sso_extra_scopes": "Sso extra scopes",
+-  "sso_jwt_public_key": "Sso jwt public key",
+-  "sso_login_enabled": "Sso login enabled",
+-  "sso_login_platform": "Sso login platform",
++  "sso_application_name": "SSO application name",
++  "sso_auto_register": "SSO auto register",
++  "sso_client_id": "SSO client id",
++  "sso_client_secret": "SSO client secret",
++  "sso_compatibility_mode": "SSO compatibility mode",
++  "sso_default_dir": "SSO default dir",
++  "sso_default_permission": "SSO default permission",
++  "sso_endpoint_name": "SSO endpoint name",
++  "sso_extra_scopes": "SSO extra scopes",
++  "sso_jwt_public_key": "SSO jwt public key",
++  "sso_login_enabled": "SSO login enabled",
++  "sso_login_platform": "SSO login platform",
+   "sso_login_platforms": {
+     "Casdoor": "Casdoor",
+     "Dingtalk": "Dingtalk",
+@@ -130,8 +131,8 @@
+     "Microsoft": "Microsoft",
+     "OIDC": "OIDC"
+   },
+-  "sso_oidc_username_key": "Sso oidc username key",
+-  "sso_organization_name": "Sso organization name",
++  "sso_oidc_username_key": "SSO oidc username key",
++  "sso_organization_name": "SSO organization name",
+   "text_types": "Text types",
+   "token": "Token",
+   "transmission_seedtime": "Transmission seedtime",
+diff --git a/src/lang/en/shares.json b/src/lang/en/shares.json
+index 7bd97eab0..75d807d6e 100644
+--- a/src/lang/en/shares.json
++++ b/src/lang/en/shares.json
+@@ -19,13 +19,13 @@
+   "remark": "Remark",
+   "readme": "Description",
+   "header": "Header Description",
+-  "order_by": "Order by",
++  "order_by": "Order By",
+   "order_bys": {
+     "name": "Name",
+     "size": "Size",
+     "modified": "Modified"
+   },
+-  "order_direction": "Order direction",
++  "order_direction": "Order Direction",
+   "order_directions": {
+     "asc": "Ascending",
+     "desc": "Descending"
+@@ -35,7 +35,7 @@
+     "front": "Folders on Top",
+     "back": "Folders at Bottom"
+   },
+-  "input_password": "Please enter share code",
++  "input_password": "Please enter Share Code",
+   "copy_msg": "Copy link",
+   "no_permission_tip": "To create a share, you need \"Share\" permission."
+ }
+diff --git a/src/lang/en/storages.json b/src/lang/en/storages.json
+index e6625bbf9..2f068b9f8 100644
+--- a/src/lang/en/storages.json
++++ b/src/lang/en/storages.json
+@@ -10,25 +10,27 @@
+     "remark": "Remark",
+     "cache_expiration": "Cache Expiration",
+     "cache_expiration-tips": "The cache expiration time for this storage (minutes)",
+-    "down_proxy_url": "Download proxy URL",
+-    "disable_proxy_sign": "Disable proxy sign",
++    "custom_cache_policies": "Custom Cache Policies",
++    "custom_cache_policies-tips": "The cache expiration rules for this storage (minutes)",
++    "down_proxy_url": "Download Proxy URL",
++    "disable_proxy_sign": "Disable Proxy Sign",
+     "disable_proxy_sign-tips": "Disable sign for download proxy URL",
+-    "web_proxy": "Web proxy",
+-    "webdav_policy": "WebDAV policy",
+-    "proxy_range": "Proxy range",
++    "web_proxy": "Web Proxy",
++    "webdav_policy": "WebDAV Policy",
++    "proxy_range": "Proxy Range",
+     "proxy_range-tips": "Need to enable proxy",
+     "webdav_policys": {
+       "302_redirect": "302 redirect",
+       "use_proxy_url": "Use proxy URL",
+       "native_proxy": "Native proxy"
+     },
+-    "order_by": "Order by",
++    "order_by": "Order By",
+     "order_bys": {
+       "name": "Name",
+       "size": "Size",
+       "modified": "Modified"
+     },
+-    "order_direction": "Order direction",
++    "order_direction": "Order Direction",
+     "order_directions": {
+       "asc": "Ascending",
+       "desc": "Descending"
+diff --git a/src/lang/en/users.json b/src/lang/en/users.json
+index 19d8ed429..6413e03b7 100644
+--- a/src/lang/en/users.json
++++ b/src/lang/en/users.json
+@@ -22,6 +22,7 @@
+   "role": "Role",
+   "permission": "Permission",
+   "disabled": "Disabled",
++  "allow_ldap": "Allow LDAP login",
+   "available": "Available",
+   "update_profile": "Update Profile",
+   "update_profile_success": "Profile updated successfully, please log in again.",
+diff --git a/src/pages/home/folder/List.tsx b/src/pages/home/folder/List.tsx
+index d6446a537..6ee0dd9b5 100644
+--- a/src/pages/home/folder/List.tsx
++++ b/src/pages/home/folder/List.tsx
+@@ -1,6 +1,6 @@
+ import { HStack, VStack, Text } from "@hope-ui/solid"
+-import { batch, createEffect, createSignal, For, Show } from "solid-js"
+-import { useT } from "~/hooks"
++import { batch, createEffect, createSignal, For, Show, onMount } from "solid-js"
++import { useT, useRouter } from "~/hooks"
+ import {
+   allChecked,
+   checkboxOpen,
+@@ -17,15 +17,56 @@ import { Col, cols, ListItem } from "./ListItem"
+ import { ItemCheckbox, useSelectWithMouse } from "./helper"
+ import { bus } from "~/utils"
+ 
++export interface SortState {
++  orderBy: string
++  reverse: boolean
++}
++
++const SORT_KEY_PREFIX = "dir_sort_"
++
++export function saveSortState(dir: string, state: SortState) {
++  try {
++    localStorage.setItem(`${SORT_KEY_PREFIX}${dir}`, JSON.stringify(state))
++  } catch (err) {
++    console.warn("failed to save sort config:", err)
++  }
++}
++
++export function loadSortState(dir: string): SortState | null {
++  try {
++    const item = localStorage.getItem(`${SORT_KEY_PREFIX}${dir}`)
++    if (!item) return null
++    return JSON.parse(item) as SortState
++  } catch (err) {
++    console.warn("failed to read sort config:", err)
++    return null
++  }
++}
++
+ export const ListTitle = (props: {
+   sortCallback: (orderBy: OrderBy, reverse?: boolean) => void
+   disableCheckbox?: boolean
++  initialOrder?: OrderBy
++  initialReverse?: boolean
+ }) => {
+   const t = useT()
+-  const [orderBy, setOrderBy] = createSignal<OrderBy>()
+-  const [reverse, setReverse] = createSignal(false)
++  const { pathname } = useRouter()
++
++  const [orderBy, setOrderBy] = createSignal<OrderBy | undefined>(
++    props.initialOrder,
++  )
++  const [reverse, setReverse] = createSignal(props.initialReverse ?? false)
++
++  createEffect(() => {
++    if (props.initialOrder !== undefined) {
++      setOrderBy(props.initialOrder)
++      setReverse(props.initialReverse ?? false)
++    }
++  })
++
+   createEffect(() => {
+     if (orderBy()) {
++      saveSortState(pathname(), { orderBy: orderBy()!, reverse: reverse() })
+       props.sortCallback(orderBy()!, reverse())
+     }
+   })
+@@ -82,6 +123,23 @@ export const ListTitle = (props: {
+ }
+ 
+ const ListLayout = () => {
++  const { pathname } = useRouter()
++
++  const [initialOrder, setInitialOrder] = createSignal<OrderBy>()
++  const [initialReverse, setInitialReverse] = createSignal(false)
++
++  const { registerSelectContainer, captureContentMenu } = useSelectWithMouse()
++  registerSelectContainer()
++
++  onMount(() => {
++    const saved = loadSortState(pathname())
++    if (saved) {
++      setInitialOrder(saved.orderBy as OrderBy)
++      setInitialReverse(saved.reverse)
++      sortObjs(saved.orderBy as OrderBy, saved.reverse)
++    }
++  })
++
+   const onDragOver = (e: DragEvent) => {
+     const items = Array.from(e.dataTransfer?.items ?? [])
+     for (let i = 0; i < items.length; i++) {
+@@ -93,9 +151,7 @@ const ListLayout = () => {
+       }
+     }
+   }
+-  const { isMouseSupported, registerSelectContainer, captureContentMenu } =
+-    useSelectWithMouse()
+-  registerSelectContainer()
++
+   return (
+     <VStack
+       onDragOver={onDragOver}
+@@ -104,7 +160,11 @@ const ListLayout = () => {
+       w="$full"
+       spacing="$1"
+     >
+-      <ListTitle sortCallback={sortObjs} />
++      <ListTitle
++        sortCallback={sortObjs}
++        initialOrder={initialOrder()}
++        initialReverse={initialReverse()}
++      />
+       <For each={objStore.objs}>
+         {(obj, i) => {
+           return <ListItem obj={obj} index={i()} />
+diff --git a/src/pages/home/previews/aliyun_video.tsx b/src/pages/home/previews/aliyun_video.tsx
+index 3e0032ee8..414839249 100644
+--- a/src/pages/home/previews/aliyun_video.tsx
++++ b/src/pages/home/previews/aliyun_video.tsx
+@@ -9,6 +9,7 @@ import { type Option } from "artplayer/types/option"
+ import { type Setting } from "artplayer/types/setting"
+ import { type Events } from "artplayer/types/events"
+ import artplayerPluginDanmuku from "artplayer-plugin-danmuku"
++import { type Option as DanmukuOption } from "artplayer-plugin-danmuku"
+ import artplayerPluginAss from "~/components/artplayer-plugin-ass"
+ import Hls from "hls.js"
+ import { currentLang } from "~/app/i18n"
+@@ -286,18 +287,17 @@ const Preview = () => {
+   if (danmu) {
+     option.plugins?.push(
+       artplayerPluginDanmuku({
+-        danmuku: proxyLink(danmu, true),
+         speed: 5,
+         opacity: 1,
+         fontSize: 25,
+-        color: "#FFFFFF",
+         mode: 0,
+-        margin: [0, "0%"],
+         antiOverlap: false,
+         synchronousPlayback: false,
+-        lockTime: 5,
+-        maxLength: 100,
+         theme: "dark",
++        heatmap: true,
++        ...JSON.parse(localStorage.getItem("danmuku_config") || "{}"),
++        emitter: false,
++        danmuku: proxyLink(danmu, true),
+       }),
+     )
+   }
+@@ -342,6 +342,37 @@ const Preview = () => {
+       player.on("ready", () => {
+         player.fullscreen = auto_fullscreen
+       })
++      if (danmu) {
++        player.on("artplayerPluginDanmuku:config", (option) => {
++          const {
++            speed,
++            margin,
++            opacity,
++            mode,
++            modes,
++            fontSize,
++            antiOverlap,
++            synchronousPlayback,
++            heatmap,
++            visible,
++          } = option as DanmukuOption
++          localStorage.setItem(
++            "danmuku_config",
++            JSON.stringify({
++              speed,
++              margin,
++              opacity,
++              mode,
++              modes,
++              fontSize,
++              antiOverlap,
++              synchronousPlayback,
++              heatmap,
++              visible,
++            }),
++          )
++        })
++      }
+       player.on("video:ended", () => {
+         if (!autoNext()) return
+         next_video()
+diff --git a/src/pages/home/previews/archive.tsx b/src/pages/home/previews/archive.tsx
+index b1f741994..3ba53d525 100644
+--- a/src/pages/home/previews/archive.tsx
++++ b/src/pages/home/previews/archive.tsx
+@@ -20,16 +20,35 @@ import {
+   Match,
+   Show,
+   Switch,
++  Suspense,
++  onCleanup,
+ } from "solid-js"
+-import { getMainColor, local, me, OrderBy, password } from "~/store"
+-import { Obj, ObjTree, UserMethods, UserPermissions } from "~/types"
+-import { useFetch, useRouter, useT, useUtil } from "~/hooks"
++import { Dynamic } from "solid-js/web"
++import {
++  getMainColor,
++  local,
++  me,
++  OrderBy,
++  password,
++  objStore,
++  ObjStore,
++} from "~/store"
++import {
++  Obj,
++  ObjTree,
++  UserMethods,
++  UserPermissions,
++  ObjType,
++  ArchiveObj,
++} from "~/types"
++import { useFetch, useRouter, useT, useUtil, useLink } from "~/hooks"
+ import { ListTitle } from "~/pages/home/folder/List"
+ import { cols } from "~/pages/home/folder/ListItem"
+-import { Error, MaybeLoading } from "~/components"
++import { Error, MaybeLoading, FullLoading, SelectWrapper } from "~/components"
++import { OpenWith } from "../file/open-with"
++import { getPreviews } from "."
+ import {
+   bus,
+-  encodePath,
+   formatDate,
+   fsArchiveList,
+   fsArchiveMeta,
+@@ -58,6 +77,7 @@ type ListItemProps = {
+   innerPath: string
+   url?: string
+   pass: string
++  onFileClick?: () => void
+ }
+ 
+ const ListItem = (props: ListItemProps) => {
+@@ -88,8 +108,8 @@ const ListItem = (props: ListItemProps) => {
+         on:click={(_: MouseEvent) => {
+           if (props.obj.is_dir) {
+             props.jumpCallback()
+-          } else if (props.url) {
+-            download(props.url)
++          } else if (!props.obj.is_dir && props.onFileClick) {
++            props.onFileClick()
+           }
+         }}
+         onContextMenu={(e: MouseEvent) => {
+@@ -219,6 +239,7 @@ type List = {
+ const Preview = () => {
+   const t = useT()
+   const { pathname } = useRouter()
++  const { rawLink } = useLink()
+   const [metaLoading, fetchMeta] = useFetch(fsArchiveMeta)
+   const [listLoading, fetchList] = useFetch(fsArchiveList)
+   const loading = createMemo(() => {
+@@ -238,6 +259,8 @@ const Preview = () => {
+   const [extractFolder, setExtractFolder] = createSignal<"" | "front" | "back">(
+     "",
+   )
++  const [selectedFile, setSelectedFile] = createSignal<string>("")
++  const [selectedPreviewName, setSelectedPreviewName] = createSignal("")
+   const getObjsMutex = createMutex()
+   const toList = (tree: ObjTree[] | Obj[]): List => {
+     let l: List = {}
+@@ -361,6 +384,20 @@ const Preview = () => {
+     }
+     return ret
+   }
++  // Build inner file url for current path by filename
++  const buildInnerUrl = (name: string) => {
++    const innerPath =
++      (innerPaths().length > 0 ? "/" + innerPaths().join("/") : "") + "/" + name
++    return innerPath
++  }
++  // Build obj with inner property
++  const buildObjWithInner = (obj: Obj): ArchiveObj => {
++    const innerPath =
++      innerPaths().length > 0 ? "/" + innerPaths().join("/") : ""
++
++    return { ...obj, sign: sign, inner_path: innerPath, archive: originalObj }
++  }
++
+   const sortObjs = (orderBy: OrderBy, reverse?: boolean) => {
+     batch(() => {
+       setExtractFolder("")
+@@ -370,13 +407,79 @@ const Preview = () => {
+       }
+     })
+   }
++
++  // Get all files for navigation
++  const files = createMemo(() =>
++    sortedObjs()
++      .filter((obj) => !obj.is_dir)
++      .map((f) => buildObjWithInner(f)),
++  )
++
++  const previews = createMemo(() => {
++    const file = files().find((f) => f.name === selectedFile())
++    if (!file) return []
++
++    return getPreviews({ ...file, provider: objStore.provider })
++  })
++
++  const currentPreview = createMemo(() => {
++    const p = previews()
++    if (p.length === 0) return null
++    if (selectedPreviewName()) {
++      const found = p.find((item) => item.name === selectedPreviewName())
++      if (found) return found
++    }
++    return p[0]
++  })
++
++  // Cast to ArchiveObj to make sure onCleanup can delete archive property correctly
++  const originalObj: ArchiveObj = {
++    ...objStore.obj,
++    inner_path: undefined,
++    archive: undefined,
++  }
++  const originalRawUrl = objStore.raw_url
++
++  const changeFile = (name: string) => {
++    batch(() => {
++      if (name === "") {
++        // Restore
++        ObjStore.setObj(originalObj)
++        ObjStore.setRawUrl(originalRawUrl)
++        setSelectedFile("")
++      } else {
++        // Set new
++        const file = files().find((f) => f.name === name)
++        if (file) {
++          const innerUrl = rawLink(file)
++          ObjStore.setObj(file)
++          ObjStore.setRawUrl(innerUrl)
++          setSelectedFile(name)
++        }
++      }
++    })
++  }
++
++  onCleanup(() => {
++    // Restore original values
++    ObjStore.setObj(originalObj)
++    ObjStore.setRawUrl(originalRawUrl)
++  })
++
++  createEffect(() => {
++    selectedFile()
++    setSelectedPreviewName("")
++  })
+   return (
+     <VStack spacing="$2" w="$full">
+       <Breadcrumb pl="$2" pr="$2" w="$full">
+         <BreadcrumbItem>
+           <BreadcrumbLink
+-            currentPage={innerPaths().length === 0}
+-            on:click={() => setInnerPaths([])}
++            currentPage={innerPaths().length === 0 && !selectedFile()}
++            on:click={() => {
++              setInnerPaths([])
++              changeFile("")
++            }}
+           >
+             .
+           </BreadcrumbLink>
+@@ -386,14 +489,23 @@ const Preview = () => {
+             <BreadcrumbItem>
+               <BreadcrumbSeparator />
+               <BreadcrumbLink
+-                currentPage={innerPaths().length === i() + 1}
+-                on:click={() => setInnerPaths(innerPaths().slice(0, i() + 1))}
++                currentPage={innerPaths().length === i() + 1 && !selectedFile()}
++                on:click={() => {
++                  setInnerPaths(innerPaths().slice(0, i() + 1))
++                  changeFile("")
++                }}
+               >
+                 {name}
+               </BreadcrumbLink>
+             </BreadcrumbItem>
+           )}
+         </For>
++        <Show when={selectedFile()}>
++          <BreadcrumbItem>
++            <BreadcrumbSeparator />
++            <BreadcrumbLink currentPage={true}>{selectedFile()}</BreadcrumbLink>
++          </BreadcrumbItem>
++        </Show>
+       </Breadcrumb>
+       <Switch>
+         <Match when={error() !== ""}>
+@@ -414,47 +526,75 @@ const Preview = () => {
+           </Password>
+         </Match>
+         <Match when={!requiringPassword() && error() === ""}>
+-          <MaybeLoading loading={loading()}>
+-            <VStack class="list" w="$full" spacing="$1">
+-              <ListTitle sortCallback={sortObjs} disableCheckbox />
+-              <For each={sortedObjs()}>
+-                {(obj, i) => {
+-                  let url = undefined
+-                  let innerPath =
+-                    (innerPaths().length > 0
+-                      ? "/" + innerPaths().join("/")
+-                      : "") +
+-                    "/" +
+-                    obj.name
+-                  if (!obj.is_dir) {
+-                    const hasQuery = raw_url.includes("?")
+-                    url =
+-                      raw_url +
+-                      `${hasQuery ? "&" : "?"}inner=${encodePath(innerPath, true)}`
+-                    if (archive_pass !== "") {
+-                      url = url + `&pass=${encodeURIComponent(archive_pass)}`
+-                    }
+-                    if (sign !== "") {
+-                      url = url + `&sign=${sign}`
+-                    }
+-                  }
+-                  return (
+-                    <ListItem
+-                      obj={obj}
+-                      index={i()}
+-                      jumpCallback={() =>
+-                        setInnerPaths(innerPaths().concat(obj.name))
++          <Show
++            when={selectedFile()}
++            fallback={
++              <MaybeLoading loading={loading()}>
++                <VStack class="list" w="$full" spacing="$1">
++                  <ListTitle sortCallback={sortObjs} disableCheckbox />
++                  <For each={sortedObjs()}>
++                    {(obj, i) => {
++                      const objWithInner = buildObjWithInner(obj)
++                      // Use rawLink to construct the URL for the object
++                      let url = !obj.is_dir ? rawLink(objWithInner) : undefined
++                      let innerPath = buildInnerUrl(obj.name)
++                      return (
++                        <ListItem
++                          obj={obj}
++                          index={i()}
++                          jumpCallback={() =>
++                            setInnerPaths(innerPaths().concat(obj.name))
++                          }
++                          innerPath={innerPath}
++                          url={url}
++                          pass={archive_pass}
++                          onFileClick={() => changeFile(obj.name)}
++                        />
++                      )
++                    }}
++                  </For>
++                  <ContextMenu />
++                </VStack>
++              </MaybeLoading>
++            }
++          >
++            <Show when={selectedFile()} fallback={<FullLoading />}>
++              <VStack w="$full" spacing="$2" alignItems="center">
++                <Show when={currentPreview()}>
++                  <Suspense fallback={<FullLoading />}>
++                    <Dynamic
++                      component={currentPreview()?.component}
++                      images={files().filter((f) => f.type === ObjType.IMAGE)}
++                      navigate={(name) => {
++                        changeFile(name)
++                      }}
++                    />
++                  </Suspense>
++                </Show>
++                <HStack w="$full" justifyContent="center" spacing="$2" p="$2">
++                  <Show when={previews().length > 1}>
++                    <SelectWrapper
++                      value={currentPreview()?.name || ""}
++                      onChange={(value) =>
++                        setSelectedPreviewName(String(value))
+                       }
+-                      innerPath={innerPath}
+-                      url={url}
+-                      pass={archive_pass}
++                      options={previews().map((p) => ({
++                        value: p.name,
++                        label: p.name,
++                      }))}
+                     />
+-                  )
+-                }}
+-              </For>
+-              <ContextMenu />
+-            </VStack>
+-          </MaybeLoading>
++                  </Show>
++                  <OpenWith
++                    file={{
++                      name: selectedFile(),
++                      raw_url: objStore.raw_url,
++                      d_url: objStore.raw_url,
++                    }}
++                  />
++                </HStack>
++              </VStack>
++            </Show>
++          </Show>
+         </Match>
+       </Switch>
+       <Show when={comment() !== ""}>
+diff --git a/src/pages/home/previews/image.tsx b/src/pages/home/previews/image.tsx
+index f49651a64..44bf9a21b 100644
+--- a/src/pages/home/previews/image.tsx
++++ b/src/pages/home/previews/image.tsx
+@@ -1,22 +1,50 @@
+ import { Error, FullLoading, ImageWithError } from "~/components"
+ import { useRouter, useT } from "~/hooks"
+ import { objStore } from "~/store"
+-import { ObjType } from "~/types"
++import { Obj, ObjType } from "~/types"
+ import { onCleanup, onMount } from "solid-js"
+ 
+-const Preview = () => {
++interface PreviewProps {
++  images?: Obj[]
++  navigate?: (name: string) => void
++}
++
++const Preview = (props: PreviewProps) => {
+   const t = useT()
+   const { replace } = useRouter()
+-  let images = objStore.objs.filter((obj) => obj.type === ObjType.IMAGE)
++  let images =
++    props.images || objStore.objs.filter((obj) => obj.type === ObjType.IMAGE)
+   if (images.length === 0) {
+     images = [objStore.obj]
+   }
+-  const onKeydown = (e: KeyboardEvent) => {
++
++  const prev = () => {
++    const index = images.findIndex((f) => f.name === objStore.obj.name)
++    if (index > 0) {
++      if (props.navigate) {
++        props.navigate(images[index - 1].name)
++      } else {
++        replace(images[index - 1].name)
++      }
++    }
++  }
++
++  const next = () => {
+     const index = images.findIndex((f) => f.name === objStore.obj.name)
+-    if (e.key === "ArrowLeft" && index > 0) {
+-      replace(images[index - 1].name)
+-    } else if (e.key === "ArrowRight" && index < images.length - 1) {
+-      replace(images[index + 1].name)
++    if (index < images.length - 1) {
++      if (props.navigate) {
++        props.navigate(images[index + 1].name)
++      } else {
++        replace(images[index + 1].name)
++      }
++    }
++  }
++
++  const onKeydown = (e: KeyboardEvent) => {
++    if (e.key === "ArrowLeft") {
++      prev()
++    } else if (e.key === "ArrowRight") {
++      next()
+     }
+   }
+   onMount(() => {
+diff --git a/src/pages/home/previews/index.ts b/src/pages/home/previews/index.ts
+index efa27e2a6..c39d63232 100644
+--- a/src/pages/home/previews/index.ts
++++ b/src/pages/home/previews/index.ts
+@@ -1,6 +1,6 @@
+ import { Component, lazy } from "solid-js"
+ import { getIframePreviews, me, getSettingBool, isArchive } from "~/store"
+-import { Obj, ObjType, UserMethods, UserPermissions } from "~/types"
++import { Obj, ObjType, UserMethods, UserPermissions, ArchiveObj } from "~/types"
+ import { ext } from "~/utils"
+ import { generateIframePreview } from "./iframe"
+ import { useRouter } from "~/hooks"
+@@ -34,6 +34,7 @@ export interface Preview {
+   provider?: RegExp
+   component: Component
+   prior: Prior
++  availableInArchive?: boolean
+ }
+ 
+ export type PreviewComponent = Pick<Preview, "name" | "component">
+@@ -82,6 +83,7 @@ const previews: Preview[] = [
+     exts: ["url"],
+     component: lazy(() => import("./text-editor")),
+     prior: true,
++    availableInArchive: false,
+   },
+   {
+     name: "Image",
+@@ -172,6 +174,7 @@ const previews: Preview[] = [
+           !getSettingBool("share_preview_download_by_default"))
+       )
+     },
++    availableInArchive: false,
+   },
+ ]
+ 
+@@ -186,6 +189,7 @@ export const getPreviews = (
+   const downloadPrior =
+     (!isShare() && getSettingBool("preview_download_by_default")) ||
+     (isShare() && getSettingBool("share_preview_download_by_default"))
++  const isInArchive = !!(file as ArchiveObj).archive
+   // internal previews
+   if (!isShare() || getSettingBool("share_preview")) {
+     previews.forEach((preview) => {
+@@ -198,6 +202,10 @@ export const getPreviews = (
+         extsContains(preview.exts, file.name)
+       ) {
+         const r = { name: preview.name, component: preview.component }
++        // Skip previews that are not available in archive when file is in archive
++        if (isInArchive && preview.availableInArchive === false) {
++          return
++        }
+         if (!downloadPrior && isPrior(preview.prior)) {
+           res.push(r)
+         } else {
+diff --git a/src/pages/home/previews/video.tsx b/src/pages/home/previews/video.tsx
+index 6592d4596..396b55cf8 100644
+--- a/src/pages/home/previews/video.tsx
++++ b/src/pages/home/previews/video.tsx
+@@ -9,6 +9,7 @@ import { type Option } from "artplayer/types/option"
+ import { type Setting } from "artplayer/types/setting"
+ import { type Events } from "artplayer/types/events"
+ import artplayerPluginDanmuku from "artplayer-plugin-danmuku"
++import { type Option as DanmukuOption } from "artplayer-plugin-danmuku"
+ import artplayerPluginAss from "~/components/artplayer-plugin-ass"
+ import mpegts from "mpegts.js"
+ import Hls from "hls.js"
+@@ -277,19 +278,17 @@ const Preview = () => {
+   if (danmu) {
+     option.plugins?.push(
+       artplayerPluginDanmuku({
+-        danmuku: proxyLink(danmu, true),
+         speed: 5,
+         opacity: 1,
+         fontSize: 25,
+-        color: "#FFFFFF",
+         mode: 0,
+-        margin: [0, "0%"],
+         antiOverlap: false,
+         synchronousPlayback: false,
+-        lockTime: 5,
+-        maxLength: 100,
+         theme: "dark",
+         heatmap: true,
++        ...JSON.parse(localStorage.getItem("danmuku_config") || "{}"),
++        emitter: false,
++        danmuku: proxyLink(danmu, true),
+       }),
+     )
+   }
+@@ -307,6 +306,37 @@ const Preview = () => {
+     player.on("ready", () => {
+       player.fullscreen = auto_fullscreen
+     })
++    if (danmu) {
++      player.on("artplayerPluginDanmuku:config", (option) => {
++        const {
++          speed,
++          margin,
++          opacity,
++          mode,
++          modes,
++          fontSize,
++          antiOverlap,
++          synchronousPlayback,
++          heatmap,
++          visible,
++        } = option as DanmukuOption
++        localStorage.setItem(
++          "danmuku_config",
++          JSON.stringify({
++            speed,
++            margin,
++            opacity,
++            mode,
++            modes,
++            fontSize,
++            antiOverlap,
++            synchronousPlayback,
++            heatmap,
++            visible,
++          }),
++        )
++      })
++    }
+     player.on("video:ended", () => {
+       if (!autoNext()) return
+       next_video()
+diff --git a/src/pages/home/toolbar/BatchRename.tsx b/src/pages/home/toolbar/BatchRename.tsx
+index e2abeabd1..e74137cc3 100644
+--- a/src/pages/home/toolbar/BatchRename.tsx
++++ b/src/pages/home/toolbar/BatchRename.tsx
+@@ -40,17 +40,31 @@ export const BatchRename = () => {
+   const [type, setType] = createSignal("1")
+   const [srcName, setSrcName] = createSignal("")
+   const [newName, setNewName] = createSignal("")
++  const [paddingZeros, setPaddingZeros] = createSignal("")
+   const [newNameType, setNewNameType] = createSignal("string")
+   const [matchNames, setMatchNames] = createSignal<RenameObj[]>([])
+   const [validationErrorSrc, setValidationErrorSrc] = createSignal<string>("")
+   const [validationErrorNew, setValidationErrorNew] = createSignal<string>("")
+   const t = useT()
+ 
++  const validateRegex = (pattern: string) => {
++    try {
++      // eslint-disable-next-line no-new
++      new RegExp(pattern)
++      return { valid: true as const }
++    } catch (e) {
++      return { valid: false as const, error: "invalid_regex" }
++    }
++  }
++
+   const handleInputSrc = (newValue: string) => {
+     setSrcName(newValue)
+     if (type() === "2" || type() === "3") {
+       const validation = validateFilename(newValue)
+       setValidationErrorSrc(validation.valid ? "" : validation.error || "")
++    } else if (type() === "1") {
++      const validation = validateRegex(newValue)
++      setValidationErrorSrc(validation.valid ? "" : validation.error || "")
+     } else {
+       setValidationErrorSrc("")
+     }
+@@ -91,6 +105,13 @@ export const BatchRename = () => {
+       notify.warning(t("global.empty_input"))
+       return
+     }
++    if (type() === "1") {
++      const validationSrc = validateRegex(srcName())
++      if (!validationSrc.valid) {
++        notify.warning(t(`global.${validationSrc.error}`))
++        return
++      }
++    }
+     if (type() === "2" || type() === "3") {
+       const validationSrc = validateFilename(srcName())
+       if (!validationSrc.valid) {
+@@ -103,10 +124,10 @@ export const BatchRename = () => {
+         return
+       }
+     }
+-    const replaceRegexp = new RegExp(srcName(), "g")
+-
+     let matchNames: RenameObj[]
+     if (type() === "1") {
++      const replaceRegexp = new RegExp(srcName(), "g")
++
+       matchNames = selectedObjs()
+         .filter((obj) => obj.name.match(srcName()))
+         .map((obj) => {
+@@ -169,16 +190,26 @@ export const BatchRename = () => {
+         })
+     } else if (type() === "2") {
+       let tempNum = newName()
++      const hasNumberPlaceholder = srcName().includes("{number}")
++      const paddingLength = parseInt(paddingZeros()) || 0
++
+       matchNames = selectedObjs().map((obj) => {
+-        let suffix = ""
+         const lastDotIndex = obj.name.lastIndexOf(".")
+-        if (lastDotIndex !== -1) {
+-          suffix = obj.name.substring(lastDotIndex + 1)
++        const suffix =
++          lastDotIndex !== -1 ? obj.name.substring(lastDotIndex) : ""
++        const paddedNum =
++          paddingLength > 0 ? tempNum.padStart(paddingLength, "0") : tempNum
++
++        let newFileName: string
++        if (hasNumberPlaceholder) {
++          newFileName = srcName().replace("{number}", paddedNum) + suffix
++        } else {
++          newFileName = srcName() + paddedNum + suffix
+         }
+ 
+         const renameObj: RenameObj = {
+           src_name: obj.name,
+-          new_name: srcName() + tempNum + "." + suffix,
++          new_name: newFileName,
+         }
+         tempNum = (parseInt(tempNum) + 1)
+           .toString()
+@@ -228,6 +259,9 @@ export const BatchRename = () => {
+                 } else if (event === "2") {
+                   setNewNameType("number")
+                 }
++                // Clear validation errors when switching type
++                setValidationErrorSrc("")
++                setValidationErrorNew("")
+               }}
+             >
+               <HStack spacing="$4">
+@@ -286,6 +320,26 @@ export const BatchRename = () => {
+                   {t(`global.${validationErrorNew()}`)}
+                 </Text>
+               </Show>
++              <Show when={type() === "2"}>
++                <Input
++                  id="modal-input3"
++                  type="number"
++                  min="0"
++                  step="1"
++                  placeholder={t(
++                    "home.toolbar.sequential_renaming_input3_placeholder",
++                  )}
++                  value={paddingZeros()}
++                  onInput={(e) => {
++                    setPaddingZeros(e.currentTarget.value)
++                  }}
++                  onKeyDown={(e) => {
++                    if (e.key === "Enter") {
++                      submit()
++                    }
++                  }}
++                />
++              </Show>
+             </VStack>
+           </ModalBody>
+           <ModalFooter display="flex" gap="$2">
+@@ -293,6 +347,7 @@ export const BatchRename = () => {
+               onClick={() => {
+                 setType("1")
+                 setNewNameType("string")
++                setPaddingZeros("")
+                 setValidationErrorSrc("")
+                 setValidationErrorNew("")
+                 onClose()
+@@ -349,6 +404,7 @@ export const BatchRename = () => {
+                 setMatchNames([])
+                 setType("1")
+                 setNewNameType("string")
++                setPaddingZeros("")
+                 setValidationErrorSrc("")
+                 setValidationErrorNew("")
+                 closePreviewModal()
+@@ -376,6 +432,7 @@ export const BatchRename = () => {
+                   setMatchNames([])
+                   setSrcName("")
+                   setNewName("")
++                  setPaddingZeros("")
+                   setType("1")
+                   setNewNameType("string")
+                   setValidationErrorSrc("")
+diff --git a/src/pages/home/toolbar/CopyMove.tsx b/src/pages/home/toolbar/CopyMove.tsx
+index 9f43a7a94..7276c2ff9 100644
+--- a/src/pages/home/toolbar/CopyMove.tsx
++++ b/src/pages/home/toolbar/CopyMove.tsx
+@@ -1,9 +1,27 @@
+-import { Checkbox, createDisclosure, VStack } from "@hope-ui/solid"
++import { Checkbox, createDisclosure, VStack, Button } from "@hope-ui/solid"
+ import { createSignal, onCleanup } from "solid-js"
+-import { ModalFolderChoose } from "~/components"
++import { ModalFolderChoose, FolderTreeHandler } from "~/components"
+ import { useFetch, usePath, useRouter, useT } from "~/hooks"
+-import { selectedObjs } from "~/store"
++import { me, selectedObjs } from "~/store"
+ import { bus, fsCopy, fsMove, handleRespWithNotifySuccess } from "~/utils"
++import { CgFolderAdd } from "solid-icons/cg"
++import { UserMethods, UserPermissions } from "~/types"
++
++export const CreateFolderButton = (props: { handler?: FolderTreeHandler }) => {
++  if (!UserMethods.can(me(), UserPermissions.indexOf("write"))) {
++    return null
++  }
++  const t = useT()
++  return (
++    <Button
++      leftIcon={<CgFolderAdd />}
++      size="sm"
++      onClick={() => props.handler?.startCreateFolder()}
++    >
++      {t("home.toolbar.mkdir")}
++    </Button>
++  )
++}
+ 
+ export const Copy = () => {
+   const t = useT()
+@@ -30,6 +48,7 @@ export const Copy = () => {
+       opened={isOpen()}
+       onClose={onClose}
+       loading={loading()}
++      headerSlot={(handler) => <CreateFolderButton handler={handler} />}
+       footerSlot={
+         <VStack w="$full" spacing="$2">
+           <Checkbox
+@@ -110,6 +129,7 @@ export const Move = () => {
+       opened={isOpen()}
+       onClose={onClose}
+       loading={loading()}
++      headerSlot={(handler) => <CreateFolderButton handler={handler} />}
+       footerSlot={
+         <VStack w="$full" spacing="$2">
+           <Checkbox
+diff --git a/src/pages/home/toolbar/Decompress.tsx b/src/pages/home/toolbar/Decompress.tsx
+index e78012fab..475c82984 100644
+--- a/src/pages/home/toolbar/Decompress.tsx
++++ b/src/pages/home/toolbar/Decompress.tsx
+@@ -11,6 +11,7 @@ import { bus, fsArchiveDecompress, handleRespWithNotifySuccess } from "~/utils"
+ import { batch, createSignal, onCleanup } from "solid-js"
+ import { ModalFolderChoose } from "~/components"
+ import { selectedObjs } from "~/store"
++import { CreateFolderButton } from "./CopyMove"
+ 
+ export const Decompress = () => {
+   const t = useT()
+@@ -23,9 +24,14 @@ export const Decompress = () => {
+   const [cacheFull, setCacheFull] = createSignal(true)
+   const [putIntoNewDir, setPutIntoNewDir] = createSignal(false)
+   const [overwrite, setOverwrite] = createSignal(false)
++  const [srcPath, setSrcPath] = createSignal("")
++  const [srcName, setSrcName] = createSignal<string[]>()
+   const handler = (name: string) => {
+     if (name === "decompress") {
++      const path = pathname()
+       batch(() => {
++        setSrcPath(path)
++        setSrcName(selectedObjs().map((o) => o.name))
+         setCacheFull(true)
+         setInnerPath("/")
+         setArchivePass("")
+@@ -35,7 +41,11 @@ export const Decompress = () => {
+   }
+   const extractHandler = (args: string) => {
+     const { inner, pass } = JSON.parse(args)
++    const path = pathname()
++    const idx = path.lastIndexOf("/")
+     batch(() => {
++      setSrcPath(path.slice(0, idx))
++      setSrcName([path.slice(idx + 1)])
+       setCacheFull(false)
+       setInnerPath(inner)
+       setArchivePass(pass)
+@@ -54,21 +64,14 @@ export const Decompress = () => {
+     }
+     return t("home.toolbar.archive.extract_header", { path: innerPath() })
+   }
+-  const getPathAndName = () => {
+-    let path = pathname()
+-    if (innerPath() === "/") {
+-      return { path: path, name: selectedObjs().map((o) => o.name) }
+-    } else {
+-      let idx = path.lastIndexOf("/")
+-      return { path: path.slice(0, idx), name: [path.slice(idx + 1)] }
+-    }
+-  }
+   return (
+     <ModalFolderChoose
+       header={header()}
+       opened={isOpen()}
+       onClose={onClose}
+       loading={loading()}
++      defaultValue={srcPath}
++      headerSlot={(handler) => <CreateFolderButton handler={handler} />}
+       footerSlot={
+         <VStack w="$full" spacing="$2">
+           <Checkbox
+@@ -81,11 +84,10 @@ export const Decompress = () => {
+         </VStack>
+       }
+       onSubmit={async (dst) => {
+-        const { path, name } = getPathAndName()
+         const resp = await ok(
+-          path,
++          srcPath(),
+           dst,
+-          name,
++          srcName(),
+           archivePass(),
+           innerPath(),
+           cacheFull(),
+diff --git a/src/pages/home/toolbar/RecursiveMove.tsx b/src/pages/home/toolbar/RecursiveMove.tsx
+index f7a03a0ef..5a880e2b8 100644
+--- a/src/pages/home/toolbar/RecursiveMove.tsx
++++ b/src/pages/home/toolbar/RecursiveMove.tsx
+@@ -15,6 +15,7 @@ import { ModalFolderChoose } from "~/components"
+ import { useFetch, usePath, useRouter, useT } from "~/hooks"
+ import { bus, fsRecursiveMove, handleRespWithNotifySuccess } from "~/utils"
+ import { createSignal, onCleanup } from "solid-js"
++import { CreateFolderButton } from "./CopyMove"
+ 
+ export const RecursiveMove = () => {
+   const {
+@@ -77,6 +78,7 @@ export const RecursiveMove = () => {
+         opened={isOpen()}
+         onClose={onClose}
+         loading={loading()}
++        headerSlot={(handler) => <CreateFolderButton handler={handler} />}
+         footerSlot={
+           <HStack mr="auto" flex="0.8" spacing="$1">
+             <SimpleSelect
+diff --git a/src/pages/home/uploads/Upload.tsx b/src/pages/home/uploads/Upload.tsx
+index 8e5f00f2e..14f276e13 100644
+--- a/src/pages/home/uploads/Upload.tsx
++++ b/src/pages/home/uploads/Upload.tsx
+@@ -49,11 +49,14 @@ const UploadFile = (props: UploadFileProps) => {
+       >
+         {props.path}
+       </Text>
+-      <HStack spacing="$2">
+-        <Badge colorScheme={StatusBadge[props.status]}>
+-          {t(`home.upload.${props.status}`)}
+-        </Badge>
+-        <Text>{getFileSize(props.speed)}/s</Text>
++      <HStack spacing="$2" w="$full" justifyContent="space-between">
++        <HStack spacing="$2">
++          <Badge colorScheme={StatusBadge[props.status]}>
++            {t(`home.upload.${props.status}`)}
++          </Badge>
++          <Text>{getFileSize(props.speed)}/s</Text>
++        </HStack>
++        <Text color="$neutral11">{getFileSize(props.size)}</Text>
+       </HStack>
+       <Progress
+         w="$full"
+@@ -98,7 +101,7 @@ const Upload = () => {
+     for await (const ms of asyncPool(3, files, handleFile)) {
+       console.log(ms)
+     }
+-    refresh(undefined, true)
++    refresh()
+   }
+   const setUpload = (path: string, key: keyof UploadFileProps, value: any) => {
+     setUploadFiles("uploads", (upload) => upload.path === path, key, value)
+diff --git a/src/pages/home/uploads/direct.ts b/src/pages/home/uploads/direct.ts
+index 5c359aab9..5b54c73f9 100644
+--- a/src/pages/home/uploads/direct.ts
++++ b/src/pages/home/uploads/direct.ts
+@@ -1,6 +1,24 @@
+ import { Upload, SetUpload } from "./types"
+ import { r, pathDir } from "~/utils"
+ 
++// Create a speed calculator using closure
++function createSpeedCalculator(throttleMs = 500) {
++  let lastLoaded = 0
++  let lastTime = Date.now()
++
++  return (loaded: number, setUpload?: SetUpload) => {
++    const now = Date.now()
++    const timeDiff = (now - lastTime) / 1000
++
++    if (timeDiff >= throttleMs / 1000) {
++      const speed = (loaded - lastLoaded) / timeDiff
++      setUpload?.("speed", speed)
++      lastLoaded = loaded
++      lastTime = now
++    }
++  }
++}
++
+ export const HttpDirectUpload: Upload = async (
+   uploadPath: string,
+   file: File,
+@@ -39,8 +57,9 @@ export const HttpDirectUpload: Upload = async (
+   const uploadURL = uploadInfo.upload_url
+   const method = uploadInfo.method || "PUT"
+ 
+-  if (chunkSize > 0 && file.size > chunkSize) {
+-    // Chunked upload
++  if (chunkSize > 0) {
++    // Always use chunked upload when chunkSize is provided
++    // This ensures Content-Range header is set for all files
+     return await uploadChunked(
+       file,
+       uploadURL,
+@@ -50,7 +69,7 @@ export const HttpDirectUpload: Upload = async (
+       setUpload,
+     )
+   } else {
+-    // Single upload
++    // Single upload for drivers that don't support chunking
+     return await uploadSingle(
+       file,
+       uploadURL,
+@@ -69,13 +88,14 @@ async function uploadSingle(
+   setUpload?: SetUpload,
+ ): Promise<undefined> {
+   const xhr = new XMLHttpRequest()
++  const calcSpeed = createSpeedCalculator()
+ 
+   return new Promise((resolve, reject) => {
+     xhr.upload.addEventListener("progress", (e) => {
+       if (e.lengthComputable && setUpload) {
+         const progress = (e.loaded / e.total) * 100
+         setUpload("progress", progress)
+-        setUpload("speed", 0) // Speed calculation not implemented
++        calcSpeed(e.loaded, setUpload)
+       }
+     })
+ 
+@@ -113,6 +133,7 @@ async function uploadChunked(
+   setUpload?: SetUpload,
+ ): Promise<undefined> {
+   const totalChunks = Math.ceil(file.size / chunkSize)
++  const calcSpeed = createSpeedCalculator()
+   let uploadedBytes = 0
+ 
+   for (let i = 0; i < totalChunks; i++) {
+@@ -125,10 +146,10 @@ async function uploadChunked(
+     await new Promise<void>((resolve, reject) => {
+       xhr.upload.addEventListener("progress", (e) => {
+         if (e.lengthComputable && setUpload) {
+-          const chunkProgress = uploadedBytes + e.loaded
+-          const progress = (chunkProgress / file.size) * 100
++          const totalLoaded = uploadedBytes + e.loaded
++          const progress = (totalLoaded / file.size) * 100
+           setUpload("progress", progress)
+-          setUpload("speed", 0) // Speed calculation not implemented
++          calcSpeed(totalLoaded, setUpload)
+         }
+       })
+ 
+diff --git a/src/pages/manage/users/AddOrEdit.tsx b/src/pages/manage/users/AddOrEdit.tsx
+index 77e299096..7a31f70c5 100644
+--- a/src/pages/manage/users/AddOrEdit.tsx
++++ b/src/pages/manage/users/AddOrEdit.tsx
+@@ -56,6 +56,7 @@ const AddOrEdit = () => {
+     permission: 0,
+     disabled: false,
+     sso_id: "",
++    allow_ldap: false,
+   })
+   const [userLoading, loadUser] = useFetch(
+     (): PResp<User> => r.get(`/admin/user/get?id=${id}`),
+@@ -145,6 +146,20 @@ const AddOrEdit = () => {
+             {t(`users.disabled`)}
+           </Checkbox>
+         </FormControl>
++        <FormControl w="fit-content" display="flex">
++          <Checkbox
++            css={{ whiteSpace: "nowrap" }}
++            id="allow_ldap"
++            onChange={(e: any) =>
++              setUser("allow_ldap", e.currentTarget.checked)
++            }
++            color="$neutral10"
++            fontSize="$sm"
++            checked={user.allow_ldap}
++          >
++            {t(`users.allow_ldap`)}
++          </Checkbox>
++        </FormControl>
+         <Button
+           loading={okLoading()}
+           onClick={async () => {
+diff --git a/src/types/obj.ts b/src/types/obj.ts
+index 5eae4ad80..c5235309e 100644
+--- a/src/types/obj.ts
++++ b/src/types/obj.ts
+@@ -19,7 +19,6 @@ export interface Obj {
+   sign?: string
+   thumb: string
+   type: ObjType
+-  path: string
+   mount_details?: MountDetails
+ }
+ 
+@@ -27,6 +26,11 @@ export type StoreObj = Obj & {
+   selected?: boolean
+ }
+ 
++export type ArchiveObj = Obj & {
++  inner_path?: string
++  archive?: Obj
++}
++
+ export type RenameObj = {
+   src_name: string
+   new_name: string
+diff --git a/src/types/user.ts b/src/types/user.ts
+index b34524073..6958d9bd9 100644
+--- a/src/types/user.ts
++++ b/src/types/user.ts
+@@ -13,6 +13,7 @@ export interface User {
+   permission: number
+   sso_id: string
+   disabled: boolean
++  allow_ldap: boolean
+   // otp: boolean;
+ }
+ 

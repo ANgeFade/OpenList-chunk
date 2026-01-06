@@ -2,8 +2,6 @@ node_modules
 dist
 /src/lang/*
 !/src/lang/en/
-!/src/lang/zh-CN/
-
 .DS_Store
 .idea
 .test
